@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Paracast">
+<meta name="theme-color" content="#1a6b3c">
+<title>Paracast</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;font-family:system-ui,sans-serif}
+body{background:#f0f4f0;min-height:100vh}
+header{background:#1a6b3c;color:#fff;padding:14px 20px;display:flex;align-items:baseline;gap:12px}
+header h1{font-size:17px;font-weight:700}
+header p{font-size:12px;opacity:.7}
+.layout{display:flex;height:calc(100vh - 50px);overflow:hidden}
+.sidebar{width:265px;min-width:265px;background:#fff;border-right:1px solid #dee2e6;display:flex;flex-direction:column}
+.field-list{flex:1;overflow-y:auto;padding:8px}
+.fi{padding:10px 12px;border-radius:8px;border:1px solid #dee2e6;margin-bottom:6px;cursor:pointer;background:#fff}
+.fi.active{border-color:#1a6b3c;background:#e8f5ee}
+.fi h3{font-size:13px;font-weight:600;margin-bottom:2px}
+.fi p{font-size:11px;color:#6c757d}
+.badge{display:inline-block;font-size:10px;font-weight:600;padding:2px 7px;border-radius:20px}
+.low{background:#d4edda;color:#155724}
+.moderate{background:#fff3cd;color:#856404}
+.high{background:#ffe0b2;color:#bf360c}
+.veryhigh{background:#f8d7da;color:#721c24}
+.pending{background:#e9ecef;color:#6c757d}
+.sidebar-footer{padding:12px;border-top:1px solid #dee2e6;display:flex;flex-direction:column;gap:6px}
+.main{flex:1;overflow-y:auto;padding:20px 24px}
+.center{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:#6c757d;text-align:center}
+button{cursor:pointer;border:none;border-radius:6px;font-size:13px;font-weight:500;padding:8px 14px}
+.btn-green{background:#1a6b3c;color:#fff;width:100%;padding:10px}
+.btn-sm{padding:5px 12px;font-size:12px}
+.btn-grey{background:#e9ecef;color:#495057;width:100%;padding:8px}
+.btn-red{background:#f8d7da;color:#721c24}
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:50;display:flex;align-items:center;justify-content:center}
+.modal{background:#fff;border-radius:12px;padding:24px;width:500px;max-width:95vw;max-height:90vh;overflow-y:auto}
+.modal h2{font-size:15px;font-weight:600;margin-bottom:16px}
+.fg{display:flex;flex-direction:column;gap:4px}
+.fg.full{grid-column:1/-1}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.hint{font-size:11px;font-weight:400;opacity:.65}
+label{font-size:12px;font-weight:500;color:#6c757d}
+input{padding:8px 10px;border:1px solid #dee2e6;border-radius:6px;font-size:13px;outline:none;width:100%}
+input:focus{border-color:#1a6b3c}
+.modal-footer{display:flex;gap:8px;justify-content:flex-end;margin-top:20px}
+.err{background:#f8d7da;color:#721c24;padding:10px 12px;border-radius:6px;font-size:13px;margin-bottom:12px}
+.cards3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:20px}
+.rcard{border-radius:10px;padding:14px;border:1px solid}
+.rcard .spname{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;opacity:.75;margin-bottom:4px}
+.rcard .rl{font-size:22px;font-weight:700;margin-bottom:2px}
+.rcard .idx{font-size:11px;margin-bottom:6px}
+.rcard .rb{height:5px;border-radius:3px;margin-bottom:8px;overflow:hidden;background:rgba(0,0,0,.1)}
+.rcard .rbf{height:100%;border-radius:3px}
+.rcard .rec{font-size:11px;line-height:1.5}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+.stat{background:#fff;border:1px solid #dee2e6;border-radius:8px;padding:12px}
+.stat .lbl{font-size:11px;color:#6c757d;margin-bottom:3px}
+.stat .val{font-size:18px;font-weight:600}
+.stat .unit{font-size:11px;color:#6c757d;font-weight:400}
+.card{background:#fff;border:1px solid #dee2e6;border-radius:8px;padding:16px;margin-bottom:14px}
+.card h3{font-size:13px;font-weight:600;margin-bottom:8px}
+.chart-wrap{width:100%;overflow:hidden;cursor:zoom-in}
+.spinner{width:36px;height:36px;border:3px solid #dee2e6;border-top-color:#1a6b3c;border-radius:50%;animation:spin .8s linear infinite;margin-bottom:14px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.dh{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px}
+.dh h2{font-size:19px;font-weight:600}
+.dh .meta{font-size:12px;color:#6c757d;margin-top:3px}
+.chart-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;display:flex;align-items:center;justify-content:center}
+.chart-overlay-inner{background:#fff;border-radius:12px;padding:24px;width:90vw;max-width:1000px}
+.wleg{display:flex;gap:14px;margin-bottom:8px;flex-wrap:wrap;font-size:11px;color:#6c757d}
+.wleg span{display:inline-flex;align-items:center;gap:4px}
+.key-box{background:#fff;border-radius:12px;padding:32px;width:440px;max-width:95vw;box-shadow:0 8px 32px rgba(0,0,0,.12)}
+.key-box h2{font-size:16px;font-weight:600;margin-bottom:8px;color:#333}
+.key-box p{font-size:13px;color:#6c757d;margin-bottom:20px;line-height:1.6}
+</style>
+</head>
+<body>
+<header>
+  <h1>Paracast</h1>
+  <p>Pasture Parasite Risk · GloWorm-FL Model</p>
+</header>
+<div class="layout">
+  <div class="sidebar">
+    <div class="field-list" id="fieldList"></div>
+    <div class="sidebar-footer">
+      <button id="btnAdd" class="btn-green">+ Add Field</button>
+      <button id="btnChangeKey" class="btn-grey">🔑 Change API Key</button>
+    </div>
+  </div>
+  <div class="main" id="main"></div>
+</div>
+
+<div class="overlay" id="overlay" style="display:none">
+  <div class="modal">
+    <h2 id="modalTitle">Add Field</h2>
+    <div id="formErr"></div>
+    <div class="form-grid">
+      <div class="fg full"><label>Field Name</label><input id="fName" placeholder="e.g. Top Meadow"></div>
+      <div class="fg"><label>Field Size (ha)</label><input id="fHa" type="number" placeholder="4.5" min="0.1" step="0.1"></div>
+      <div class="fg"><label>Sward Height (cm) <span class="hint">→ auto-fills biomass</span></label><input id="fHeight" type="number" placeholder="e.g. 8" min="0" step="0.5"></div>
+      <div class="fg full"><label>Herbage Biomass (kg DM/ha) <span class="hint">or enter directly</span></label><input id="fBio" type="number" placeholder="auto from height, or enter manually" min="0"></div>
+      <div class="fg"><label>FEC Result (epg)</label><input id="fFec" type="number" placeholder="250" min="0"></div>
+      <div class="fg"><label>Date of FEC</label><input id="fFecDate" type="date"></div>
+      <div class="fg"><label>Grazing Start</label><input id="fStart" type="date"></div>
+      <div class="fg"><label>Grazing End</label><input id="fEnd" type="date"></div>
+      <div class="fg"><label>Number of Ewes</label><input id="fEwes" type="number" placeholder="30" min="0"></div>
+      <div class="fg"><label>Number of Lambs</label><input id="fLambs" type="number" placeholder="60" min="0"></div>
+    </div>
+    <div class="modal-footer">
+      <button id="btnCancel" class="btn-grey btn-sm" style="width:auto">Cancel</button>
+      <button id="btnSave" class="btn-green btn-sm" style="width:auto">Save & Analyse</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+
+// ── State ─────────────────────────────────────────────────────────────────────
+var LAT=51.012511, LON=0.689743;
+var STATION='03882';
+var TODAY=new Date().toISOString().slice(0,10);
+var fields=JSON.parse(localStorage.getItem('paracast_fields')||'[]');
+// Reset any loading states from previous session
+fields.forEach(function(f){if(f.status==='loading')f.status='error',f.error='Session ended before analysis completed. Please re-run.';});
+var selId=null, editingId=null;
+
+function saveFields(){localStorage.setItem('paracast_fields',JSON.stringify(fields));}
+var METEOSTAT_KEY=localStorage.getItem('paracast_key')||null;
+
+// ── Species parameters (Rose et al. 2015 Table 2) ─────────────────────────────
+var SPECIES=[
+  {key:'hc',name:'H. contortus',   color:'#e74c3c',devA:-0.09746,devB:0.01063,mu12c:[-1.47135,-0.11444,0.00327],mu3c:[-2.63080,-0.14407,0.00463],mu4c:[-3.68423,-0.25346,0.00740],mu3fromMu4:false,peWindow:4, C:0.1,m1opt:0.25,m1sub:0.051,m1dry:0.0},
+  {key:'tc',name:'T. circumcincta',color:'#2980b9',devA:-0.02085,devB:0.00467,mu12c:[-1.62026,-0.17771,0.00629],mu4c:[-4.58817,-0.13996,0.00461],mu3fromMu4:true, peWindow:7, C:0.1,m1opt:0.21,m1sub:0.025,m1dry:0.0},
+  {key:'oo',name:'O. ostertagi',   color:'#27ae60',devA:-0.07258,devB:0.00976,mu12c:[-4.38278,-0.10640,0.00540],mu4c:[-6.388,-0.2681,0.01633,-0.00016],mu3fromMu4:true, peWindow:0, C:1.0,m1opt:0.06,m1sub:0.0, m1dry:0.0}
+];
+var RC={Low:'#27ae60',Moderate:'#f39c12',High:'#e67e22','Very High':'#c0392b'};
+var RB={Low:'#d4edda',Moderate:'#fff3cd',High:'#ffe0b2','Very High':'#f8d7da'};
+var RBD={Low:'#c3e6cb',Moderate:'#ffeeba',High:'#ffcc80','Very High':'#f5c6cb'};
+var RT={Low:'#155724',Moderate:'#856404',High:'#bf360c','Very High':'#721c24'};
+var RECS={
+  Low:'Low larval challenge. Continue normal monitoring.',
+  Moderate:'Moderate challenge. Monitor closely and consider targeted treatment.',
+  High:'High larval burden. Anthelmintic treatment strongly advised before re-entry.',
+  'Very High':'Very high risk. Treat immediately and move to clean pasture if possible.'
+};
+
+function riskLevel(v){return v<5?'Low':v<20?'Moderate':v<60?'High':'Very High';}
+function riskPct(r){return {Low:15,Moderate:42,High:68,'Very High':93}[r];}
+function badgeClass(r){return {Low:'low',Moderate:'moderate',High:'high','Very High':'veryhigh'}[r]||'pending';}
+function worstRisk(sp){
+  var order=['Low','Moderate','High','Very High'],w='Low';
+  SPECIES.forEach(function(s){if(order.indexOf(sp[s.key].riskLevel)>order.indexOf(w))w=sp[s.key].riskLevel;});
+  return w;
+}
+function polyMu(c,T){var v=c[0]+c[1]*T+c[2]*T*T+(c[3]?c[3]*T*T*T:0);return Math.min(1,Math.max(0,Math.exp(v)));}
+function calcM2(T){return Math.min(1,Math.max(0,Math.exp(-5.48240+0.45392*T-0.01252*T*T)));}
+function petMM(T){if(T<=0)return 0.1;return Math.max(0.1,0.0023*(T+17.8)*Math.sqrt(T)*0.408);}
+
+// ── GloWorm-FL model ──────────────────────────────────────────────────────────
+function runGloWorm(days,grazingEnd,fec,ewes,lambs,ha,biomass,sp){
+  var dailyEggsPerHa=(fec*(ewes*200+lambs*100))/ha;
+  var dilution=Math.min(1,1500/Math.max(biomass,100));
+  var rainHistory=[],E=0,L=0,L3f=0,L3p=0,out=[];
+  for(var i=0;i<days.length;i++){
+    var d=days[i];
+    var T=d.temp!=null?d.temp:10, R=d.rain!=null?d.rain:0;
+    rainHistory.push(R);
+    if(rainHistory.length>10) rainHistory.shift();
+    var delta=Math.min(1,Math.max(0,sp.devA+sp.devB*T));
+    var mu1=polyMu(sp.mu12c,T),mu2=mu1;
+    var mu4=polyMu(sp.mu4c,T);
+    var mu3=sp.mu3fromMu4?Math.min(1,mu4*10):polyMu(sp.mu3c,T);
+    var mu5=mu3, m2=calcM2(T);
+    var C=1.0;
+    if(sp.peWindow>0){
+      var wl=Math.min(sp.peWindow,rainHistory.length),cp=0,ce=0;
+      for(var w=rainHistory.length-wl;w<rainHistory.length;w++){cp+=rainHistory[w];ce+=petMM(T);}
+      if(cp/Math.max(ce,0.01)<1) C=sp.C;
+    }
+    var m1=R>=2?sp.m1opt:(R>0?sp.m1sub:sp.m1dry);
+    var Enew=d.date<=grazingEnd?dailyEggsPerHa*C:0;
+    var dE=-(mu1+2*delta)*E+Enew;
+    var dL=-(mu2+2*delta)*L+2*delta*E;
+    var dL3f=-(mu3+m1)*L3f+2*delta*L;
+    var dL3p=-(mu4*(1-m2)+mu5*m2)*L3p+m1*L3f;
+    E=Math.max(0,E+dE); L=Math.max(0,L+dL);
+    L3f=Math.max(0,L3f+dL3f);
+    L3p=Math.max(0,(L3p+dL3p)*dilution);
+    out.push({date:d.date,larval:L3p});
+  }
+  var peak=out.length?Math.max.apply(null,out.map(function(x){return x.larval;})):0;
+  var current=out.length?out[out.length-1].larval:0;
+  return {days:out,peak:peak,current:current,riskLevel:riskLevel(current)};
+}
+
+// ── Weather fetch (Meteostat) ─────────────────────────────────────────────────
+async function getWeather(start){
+  var url='https://meteostat.p.rapidapi.com/station/daily?station='+STATION+'&start='+start+'&end='+TODAY;
+  var resp;
+  try{
+    resp=await fetch(url,{headers:{'x-rapidapi-host':'meteostat.p.rapidapi.com','x-rapidapi-key':METEOSTAT_KEY}});
+  }catch(e){
+    throw new Error('Could not reach Meteostat API. Check your internet connection. ('+e.message+')');
+  }
+  if(resp.status===401||resp.status===403) throw new Error('Invalid or expired Meteostat API key. Use the Change API Key button to update it.');
+  if(!resp.ok) throw new Error('Meteostat API error (HTTP '+resp.status+').');
+  var data=await resp.json();
+  if(!data.data||!data.data.length) throw new Error('No weather data returned from Meteostat for '+start+' to '+TODAY+'.');
+  return data.data.map(function(d){
+    return {date:d.date,temp:d.tavg,rain:d.prcp||0,solar:d.tsun!=null?(d.tsun/60)*2:10};
+  });
+}
+
+// ── Key prompt ────────────────────────────────────────────────────────────────
+function showKeyPrompt(){
+  var el=document.getElementById('main');
+  el.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100%">'
+    +'<div class="key-box">'
+    +'<div style="font-size:32px;margin-bottom:12px">🔑</div>'
+    +'<h2>Meteostat API Key Required</h2>'
+    +'<p>Enter your free Meteostat RapidAPI key to fetch real weather data automatically. Get one free at <strong>rapidapi.com/meteostat</strong> (500 calls/month free).</p>'
+    +'<input id="keyInput" type="password" placeholder="Paste your RapidAPI key here" style="width:100%;padding:10px;border:1px solid #dee2e6;border-radius:6px;font-size:13px;margin-bottom:10px;outline:none">'
+    +'<div id="keyErr" style="color:#721c24;font-size:12px;margin-bottom:8px"></div>'
+    +'<button id="btnSaveKey" style="width:100%;padding:10px;background:#1a6b3c;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">Save Key & Continue</button>'
+    +'</div></div>';
+  document.getElementById('btnSaveKey').addEventListener('click',function(){
+    var k=document.getElementById('keyInput').value.trim();
+    if(!k){document.getElementById('keyErr').textContent='Please enter your API key.';return;}
+    METEOSTAT_KEY=k;
+    localStorage.setItem('paracast_key',k);
+    renderMain();
+  });
+  document.getElementById('keyInput').addEventListener('keydown',function(e){
+    if(e.key==='Enter') document.getElementById('btnSaveKey').click();
+  });
+}
+
+// ── Modal ─────────────────────────────────────────────────────────────────────
+document.getElementById('btnAdd').addEventListener('click',function(){
+  if(!METEOSTAT_KEY){showKeyPrompt();return;}
+  editingId=null;
+  document.getElementById('modalTitle').textContent='Add Field';
+  ['fName','fHa','fHeight','fBio','fFec','fFecDate','fStart','fEnd','fEwes','fLambs'].forEach(function(id){document.getElementById(id).value='';});
+  document.getElementById('formErr').innerHTML='';
+  document.getElementById('overlay').style.display='flex';
+});
+document.getElementById('btnCancel').addEventListener('click',function(){document.getElementById('overlay').style.display='none';});
+document.getElementById('overlay').addEventListener('click',function(e){if(e.target===this)this.style.display='none';});
+document.getElementById('btnSave').addEventListener('click',saveField);
+document.getElementById('btnChangeKey').addEventListener('click',function(){
+  METEOSTAT_KEY=null;
+  localStorage.removeItem('paracast_key');
+  showKeyPrompt();
+});
+document.getElementById('fHeight').addEventListener('input',function(){
+  var h=parseFloat(this.value);
+  if(!isNaN(h)&&h>0) document.getElementById('fBio').value=Math.round(h*200);
+});
+document.getElementById('fBio').addEventListener('input',function(){document.getElementById('fHeight').value='';});
+
+async function saveField(){
+  var name   =document.getElementById('fName').value.trim();
+  var ha     =parseFloat(document.getElementById('fHa').value);
+  var height =parseFloat(document.getElementById('fHeight').value)||null;
+  var biomass=parseFloat(document.getElementById('fBio').value);
+  var fec    =parseFloat(document.getElementById('fFec').value);
+  var fecDate=document.getElementById('fFecDate').value;
+  var start  =document.getElementById('fStart').value;
+  var end    =document.getElementById('fEnd').value;
+  var ewes   =parseInt(document.getElementById('fEwes').value)||0;
+  var lambs  =parseInt(document.getElementById('fLambs').value)||0;
+  var errEl  =document.getElementById('formErr');
+  var missing=[];
+  if(!name)                      missing.push('Field Name');
+  if(isNaN(ha)||ha<=0)           missing.push('Field Size');
+  if(isNaN(biomass)||biomass<=0) missing.push('Herbage Biomass (or Sward Height)');
+  if(isNaN(fec)||fec<0)          missing.push('FEC Result');
+  if(!fecDate)                   missing.push('Date of FEC');
+  if(!start)                     missing.push('Grazing Start');
+  if(!end)                       missing.push('Grazing End');
+  if(!ewes&&!lambs)              missing.push('Ewes or Lambs');
+  if(missing.length){errEl.innerHTML='<div class="err">Missing: <strong>'+missing.join(', ')+'</strong></div>';return;}
+  if(new Date(start)>=new Date(TODAY)){errEl.innerHTML='<div class="err">Grazing start must be before today.</div>';return;}
+  if(new Date(end)<=new Date(start)){errEl.innerHTML='<div class="err">Grazing end must be after start.</div>';return;}
+
+  var id=editingId||('f'+Date.now());
+  var stockDensity=(ewes+lambs)/ha;
+  var entry={id:id,name:name,ha:ha,height:height,biomass:biomass,fec:fec,fecDate:fecDate,
+    start:start,end:end,ewes:ewes,lambs:lambs,stockDensity:stockDensity,
+    status:'loading',result:null,error:null};
+  if(editingId) fields=fields.map(function(x){return x.id===editingId?entry:x;});
+  else fields.push(entry);
+  editingId=null; selId=id;
+  document.getElementById('overlay').style.display='none';
+  renderSidebar(); renderMain();
+
+  try{
+    var weather=await getWeather(start);
+    var spResults={};
+    SPECIES.forEach(function(sp){spResults[sp.key]=runGloWorm(weather,end,fec,ewes,lambs,ha,biomass,sp);});
+    var avgTemp =weather.reduce(function(a,b){return a+(b.temp||0);},0)/weather.length;
+    var totalRain=weather.reduce(function(a,b){return a+(b.rain||0);},0);
+    var avgSolar=weather.reduce(function(a,b){return a+(b.solar||0);},0)/weather.length;
+    for(var i=0;i<fields.length;i++) if(fields[i].id===id){
+      fields[i].status='done';
+      fields[i].result={species:spResults,weather:weather,avgTemp:avgTemp,totalRain:totalRain,avgSolar:avgSolar};
+      break;
+    }
+    saveFields();
+  }catch(e){
+    for(var i=0;i<fields.length;i++) if(fields[i].id===id){fields[i].status='error';fields[i].error=e.message;break;}
+    saveFields();
+  }
+  renderSidebar();
+  if(selId===id) renderMain();
+}
+
+// ── Sidebar ───────────────────────────────────────────────────────────────────
+function renderSidebar(){
+  var el=document.getElementById('fieldList');
+  if(!fields.length){el.innerHTML='<p style="padding:12px;font-size:13px;color:#6c757d">No fields yet.</p>';return;}
+  el.innerHTML=fields.map(function(f){
+    var b='<span class="badge pending">Pending</span>';
+    if(f.status==='loading') b='<span class="badge pending">Analysing...</span>';
+    else if(f.status==='error') b='<span class="badge veryhigh">Error</span>';
+    else if(f.result){var w=worstRisk(f.result.species);b='<span class="badge '+badgeClass(w)+'">'+w+'</span>';}
+    return '<div class="fi'+(selId===f.id?' active':'')+'" data-id="'+f.id+'">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px"><h3>'+f.name+'</h3>'+b+'</div>'
+      +'<p>'+f.ha+'ha · '+f.ewes+' ewes · '+f.lambs+' lambs · '+f.fec+' epg</p></div>';
+  }).join('');
+  el.querySelectorAll('.fi').forEach(function(el){el.addEventListener('click',function(){selField(this.dataset.id);});});
+}
+function selField(id){selId=id;renderSidebar();renderMain();}
+
+// ── Charts ────────────────────────────────────────────────────────────────────
+function drawParasiteOnCanvas(canvas,spResults,grazingEnd,W,H){
+  var ctx=canvas.getContext('2d');ctx.clearRect(0,0,W,H);
+  var pl=72,pr=16,pt=18,pb=34,cw=W-pl-pr,ch=H-pt-pb;
+  var allVals=[];
+  SPECIES.forEach(function(sp){spResults[sp.key].days.forEach(function(d){allVals.push(d.larval);});});
+  var mx=Math.max.apply(null,allVals)||1;
+  var days0=spResults['hc'].days,n=days0.length;if(!n) return;
+  ctx.save();ctx.font='10px system-ui';ctx.fillStyle='#999';ctx.textAlign='center';
+  ctx.translate(11,pt+ch/2);ctx.rotate(-Math.PI/2);ctx.fillText('L3 larvae / ha',0,0);ctx.restore();
+  ctx.font='10px system-ui';ctx.textAlign='right';
+  [0,0.25,0.5,0.75,1].forEach(function(frac){
+    var gy=pt+ch-frac*ch;
+    ctx.fillStyle='#aaa';ctx.fillText(Math.round(frac*mx).toLocaleString(),pl-5,gy+3);
+    ctx.strokeStyle='#ececec';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(pl,gy);ctx.lineTo(pl+cw,gy);ctx.stroke();
+  });
+  ctx.strokeStyle='#ccc';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(pl,pt);ctx.lineTo(pl,pt+ch);ctx.lineTo(pl+cw,pt+ch);ctx.stroke();
+  function dateX(ds){for(var i=0;i<days0.length;i++) if(days0[i].date>=ds) return pl+(i/Math.max(n-1,1))*cw;return pl+cw;}
+  var gx=dateX(grazingEnd);
+  ctx.strokeStyle='#ccc';ctx.lineWidth=1;ctx.setLineDash([3,3]);ctx.beginPath();ctx.moveTo(gx,pt);ctx.lineTo(gx,pt+ch);ctx.stroke();
+  ctx.setLineDash([]);ctx.fillStyle='#aaa';ctx.textAlign='left';ctx.font='9px system-ui';ctx.fillText('Grazing end',gx+3,pt+10);
+  ctx.strokeStyle='#888';ctx.lineWidth=1;ctx.setLineDash([4,3]);ctx.beginPath();ctx.moveTo(pl+cw,pt);ctx.lineTo(pl+cw,pt+ch);ctx.stroke();
+  ctx.setLineDash([]);ctx.fillStyle='#555';ctx.textAlign='right';ctx.font='9px system-ui';ctx.fillText('Today',pl+cw-3,pt+10);
+  SPECIES.forEach(function(sp){
+    var spDays=spResults[sp.key].days;
+    ctx.strokeStyle=sp.color;ctx.lineWidth=2;ctx.lineJoin='round';ctx.setLineDash([]);ctx.beginPath();
+    for(var i=0;i<spDays.length;i++){var px=pl+(i/Math.max(n-1,1))*cw,py=pt+ch-(spDays[i].larval/mx)*ch;if(i===0)ctx.moveTo(px,py);else ctx.lineTo(px,py);}
+    ctx.stroke();
+  });
+  ctx.fillStyle='#aaa';ctx.textAlign='center';ctx.font='10px system-ui';ctx.setLineDash([]);
+  var skip=Math.max(1,Math.floor(n/8));
+  for(var i=0;i<n;i++) if(i%skip===0||i===n-1) ctx.fillText(days0[i].date.slice(5),pl+(i/Math.max(n-1,1))*cw,H-8);
+}
+
+function drawWeatherOnCanvas(canvas,weather,grazingEnd,W,H){
+  var ctx=canvas.getContext('2d');ctx.clearRect(0,0,W,H);
+  var pl=46,pr=46,pt=14,pb=28,cw=W-pl-pr,ch=H-pt-pb;
+  var n=weather.length;if(!n) return;
+  var temps=weather.map(function(d){return d.temp!=null?d.temp:0;});
+  var rains=weather.map(function(d){return d.rain!=null?d.rain:0;});
+  var sunHrs=weather.map(function(d){return d.solar!=null?d.solar/2:0;});
+  var maxT=Math.max.apply(null,temps)||1,minT=Math.min.apply(null,temps);
+  var maxR=Math.max.apply(null,rains)||1;
+  var maxSun=Math.max.apply(null,sunHrs)||1;
+  var skip=Math.max(1,Math.floor(n/8));
+  ctx.font='9px system-ui';
+  [0,0.25,0.5,0.75,1].forEach(function(frac){
+    var gy=pt+ch-frac*ch,tVal=minT+frac*(maxT-minT);
+    ctx.fillStyle='#aaa';ctx.textAlign='right';ctx.fillText(tVal.toFixed(0)+'°',pl-3,gy+3);
+    ctx.strokeStyle='#f0f0f0';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(pl,gy);ctx.lineTo(pl+cw,gy);ctx.stroke();
+  });
+  [0,0.5,1].forEach(function(frac){
+    var gy=pt+ch-frac*ch*0.6;
+    ctx.fillStyle='#aaa';ctx.textAlign='left';ctx.fillText((frac*maxR).toFixed(1)+'mm',pl+cw+3,gy+3);
+  });
+  ctx.strokeStyle='#ccc';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(pl,pt);ctx.lineTo(pl,pt+ch);ctx.lineTo(pl+cw,pt+ch);ctx.stroke();
+  function dateX(ds){for(var i=0;i<weather.length;i++) if(weather[i].date>=ds) return pl+(i/Math.max(n-1,1))*cw;return pl+cw;}
+  var gx=dateX(grazingEnd);
+  ctx.strokeStyle='#ccc';ctx.lineWidth=1;ctx.setLineDash([3,3]);ctx.beginPath();ctx.moveTo(gx,pt);ctx.lineTo(gx,pt+ch);ctx.stroke();
+  ctx.setLineDash([]);ctx.fillStyle='#aaa';ctx.textAlign='left';ctx.font='9px system-ui';ctx.fillText('Grazing end',gx+3,pt+10);
+  ctx.strokeStyle='#888';ctx.lineWidth=1;ctx.setLineDash([4,3]);ctx.beginPath();ctx.moveTo(pl+cw,pt);ctx.lineTo(pl+cw,pt+ch);ctx.stroke();
+  ctx.setLineDash([]);ctx.fillStyle='#555';ctx.textAlign='right';ctx.fillText('Today',pl+cw-3,pt+10);
+  var bw=Math.max(1,cw/n-1);
+  rains.forEach(function(r,i){var x=pl+(i/Math.max(n-1,1))*cw-bw/2,bh=(r/maxR)*ch*0.6;ctx.fillStyle='rgba(52,152,219,0.5)';ctx.fillRect(x,pt+ch-bh,bw,bh);});
+  ctx.strokeStyle='#f39c12';ctx.lineWidth=1.5;ctx.lineJoin='round';ctx.beginPath();
+  sunHrs.forEach(function(v,i){var x=pl+(i/Math.max(n-1,1))*cw,y=pt+ch-(v/maxSun)*ch;if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);});
+  ctx.stroke();
+  ctx.strokeStyle='#e74c3c';ctx.lineWidth=2;ctx.lineJoin='round';ctx.beginPath();
+  temps.forEach(function(v,i){var x=pl+(i/Math.max(n-1,1))*cw,range=maxT-minT||1,y=pt+ch-((v-minT)/range)*ch;if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);});
+  ctx.stroke();
+  ctx.fillStyle='#aaa';ctx.textAlign='center';ctx.font='9px system-ui';ctx.setLineDash([]);
+  for(var i=0;i<n;i++) if(i%skip===0||i===n-1) ctx.fillText(weather[i].date.slice(5),pl+(i/Math.max(n-1,1))*cw,H-8);
+}
+
+function makeCanvas(id,drawFn,W,H){
+  var c=document.getElementById(id);if(!c) return;
+  c.width=W;c.height=H;c.style.width=W+'px';c.style.height=H+'px';
+  drawFn(c);
+}
+
+function expandChart(drawFn,title){
+  var ov=document.createElement('div');ov.className='chart-overlay';
+  var inner=document.createElement('div');inner.className='chart-overlay-inner';
+  inner.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><div style="font-size:14px;font-weight:600">'+title+'</div><button id="btnCloseExp" style="background:#e9ecef;border:none;border-radius:6px;padding:5px 12px;cursor:pointer;font-size:12px">Close</button></div><canvas id="cExp"></canvas>';
+  ov.appendChild(inner);document.body.appendChild(ov);
+  inner.querySelector('#btnCloseExp').addEventListener('click',function(){document.body.removeChild(ov);});
+  ov.addEventListener('click',function(e){if(e.target===ov)document.body.removeChild(ov);});
+  setTimeout(function(){
+    var c=document.getElementById('cExp');if(!c) return;
+    var W=inner.offsetWidth-48||800,H=400;
+    c.width=W;c.height=H;c.style.width=W+'px';c.style.height=H+'px';
+    drawFn(c,W,H);
+  },60);
+}
+
+// ── Main panel ────────────────────────────────────────────────────────────────
+function renderMain(){
+  var el=document.getElementById('main');
+  if(!METEOSTAT_KEY){showKeyPrompt();return;}
+  var f=fields.find(function(x){return x.id===selId;});
+  if(!f){
+    el.innerHTML='<div class="center"><div style="font-size:48px;margin-bottom:12px">🌱</div><h2 style="color:#333;margin-bottom:6px">No field selected</h2><p>Add a field using the button in the sidebar.</p></div>';
+    return;
+  }
+  if(f.status==='loading'){
+    el.innerHTML='<div class="center"><div class="spinner"></div><div style="font-size:14px;font-weight:500">Fetching weather & running GloWorm-FL...</div><div style="font-size:12px;margin-top:6px;opacity:.7">This takes a few seconds</div></div>';
+    return;
+  }
+  if(f.status==='error'){
+    el.innerHTML='<div style="max-width:560px"><div class="err"><strong>Error:</strong> '+f.error+'</div></div>';
+    return;
+  }
+  var r=f.result,sp=r.species;
+  var cards=SPECIES.map(function(s){
+    var sr=sp[s.key],rl=sr.riskLevel,pct=riskPct(rl);
+    return '<div class="rcard" style="background:'+RB[rl]+';border-color:'+RBD[rl]+'">'
+      +'<div class="spname" style="color:'+RT[rl]+'"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:'+s.color+';margin-right:5px;vertical-align:middle"></span>'+s.name+'</div>'
+      +'<div class="rl" style="color:'+RC[rl]+'">'+rl+'</div>'
+      +'<div class="idx" style="color:'+RT[rl]+'">L3 today: '+Math.round(sr.current).toLocaleString()+' /ha</div>'
+      +'<div class="rb"><div class="rbf" style="width:'+pct+'%;background:'+RC[rl]+'"></div></div>'
+      +'<div class="rec" style="color:'+RT[rl]+'">'+RECS[rl]+'</div></div>';
+  }).join('');
+  var leg=SPECIES.map(function(s){return '<span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:#6c757d;margin-right:14px"><span style="display:inline-block;width:22px;height:3px;border-radius:2px;background:'+s.color+'"></span>'+s.name+'</span>';}).join('');
+  var heightStr=f.height?f.height+'cm sward · ':'';
+  el.innerHTML='<div class="dh"><div><h2>'+f.name+'</h2>'
+    +'<div class="meta">'+f.ha+' ha · '+heightStr+f.biomass+' kg DM/ha · '+f.ewes+' ewes · '+f.lambs+' lambs · '
+    +Math.round(f.stockDensity*10)/10+' /ha · FEC '+f.fec+' epg · '+f.start+' → '+f.end+'</div>'
+    +'</div><div style="display:flex;gap:8px">'
+    +'<button id="btnEdit" class="btn-grey btn-sm">Edit</button>'
+    +'<button id="btnDel" class="btn-red btn-sm">Delete</button>'
+    +'</div></div>'
+    +'<div class="cards3">'+cards+'</div>'
+    +'<div class="card"><h3>L3 Larval Density — '+f.start+' to Today ('+TODAY+')</h3>'
+    +'<div style="margin-bottom:10px">'+leg+'</div>'
+    +'<div class="chart-wrap" id="cParWrap" title="Click to expand"><canvas id="cMain"></canvas></div></div>'
+    +'<div class="card"><h3>Weather — '+f.start+' to Today · Lydd station (03882)</h3>'
+    +'<div class="wleg">'
+    +'<span><span style="display:inline-block;width:22px;height:3px;background:#e74c3c;border-radius:2px;vertical-align:middle"></span>Temp (°C)</span>'
+    +'<span><span style="display:inline-block;width:12px;height:10px;background:rgba(52,152,219,0.5);vertical-align:middle"></span>Rainfall (mm)</span>'
+    +'<span><span style="display:inline-block;width:22px;height:3px;background:#f39c12;border-radius:2px;vertical-align:middle"></span>Sun hours</span>'
+    +'</div>'
+    +'<div class="chart-wrap" id="cWxWrap" title="Click to expand"><canvas id="cWeather"></canvas></div></div>'
+    +'<div class="stats">'
+    +'<div class="stat"><div class="lbl">Avg Temp</div><div class="val">'+r.avgTemp.toFixed(1)+'<span class="unit"> °C</span></div></div>'
+    +'<div class="stat"><div class="lbl">Total Rainfall</div><div class="val">'+Math.round(r.totalRain)+'<span class="unit"> mm</span></div></div>'
+    +'<div class="stat"><div class="lbl">Avg Solar</div><div class="val">'+r.avgSolar.toFixed(1)+'<span class="unit"> MJ/m²</span></div></div>'
+    +'<div class="stat"><div class="lbl">Stocking Density</div><div class="val">'+Math.round(f.stockDensity*10)/10+'<span class="unit"> /ha</span></div></div>'
+    +'</div>';
+
+  document.getElementById('btnEdit').addEventListener('click',function(){
+    document.getElementById('fName').value=f.name;
+    document.getElementById('fHa').value=f.ha;
+    document.getElementById('fHeight').value=f.height||'';
+    document.getElementById('fBio').value=f.biomass;
+    document.getElementById('fFec').value=f.fec;
+    document.getElementById('fFecDate').value=f.fecDate;
+    document.getElementById('fStart').value=f.start;
+    document.getElementById('fEnd').value=f.end;
+    document.getElementById('fEwes').value=f.ewes;
+    document.getElementById('fLambs').value=f.lambs;
+    editingId=f.id;
+    document.getElementById('modalTitle').textContent='Edit Field';
+    document.getElementById('formErr').innerHTML='';
+    document.getElementById('overlay').style.display='flex';
+  });
+  document.getElementById('btnDel').addEventListener('click',function(){
+    var fid=selId;if(!confirm('Delete this field?')) return;
+    fields=fields.filter(function(x){return x.id!==fid;});
+    saveFields();
+    selId=null;renderSidebar();renderMain();
+  });
+  document.getElementById('cParWrap').addEventListener('click',function(){
+    expandChart(function(c,W,H){drawParasiteOnCanvas(c,sp,f.end,W,H);},f.name+' — L3 Larval Density');
+  });
+  document.getElementById('cWxWrap').addEventListener('click',function(){
+    expandChart(function(c,W,H){drawWeatherOnCanvas(c,r.weather,f.end,W,H);},f.name+' — Weather');
+  });
+  setTimeout(function(){
+    var W,c;
+    c=document.getElementById('cMain');
+    if(c){W=c.parentElement.offsetWidth||560;makeCanvas('cMain',function(cv){drawParasiteOnCanvas(cv,sp,f.end,W,240);},W,240);}
+    c=document.getElementById('cWeather');
+    if(c){W=c.parentElement.offsetWidth||560;makeCanvas('cWeather',function(cv){drawWeatherOnCanvas(cv,r.weather,f.end,W,200);},W,200);}
+  },100);
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+renderSidebar();
+showKeyPrompt();
+
+})();
+</script>
+</body>
+</html>

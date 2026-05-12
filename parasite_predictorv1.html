@@ -1,4 +1,5 @@
 
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -200,7 +201,8 @@ function runGloWorm(days,grazingEnd,fec,ewes,lambs,ha,biomass,sp){
 
 // ── Weather fetch (Meteostat) ─────────────────────────────────────────────────
 async function getWeather(start){
-  var url='https://meteostat.p.rapidapi.com/stations/daily?station='+STATION+'&start='+start+'&end='+TODAY;
+  // Use point/daily endpoint with farm coordinates — no station ID needed
+  var url='https://meteostat.p.rapidapi.com/point/daily?lat='+LAT+'&lon='+LON+'&start='+start+'&end='+TODAY+'&alt=10';
   var resp;
   try{
     resp=await fetch(url,{headers:{'x-rapidapi-host':'meteostat.p.rapidapi.com','x-rapidapi-key':METEOSTAT_KEY}});

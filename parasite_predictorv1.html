@@ -1,6 +1,4 @@
 
-
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -167,30 +165,59 @@ function petMM(T){if(T<=0)return 0.1;return Math.max(0.1,0.0023*(T+17.8)*Math.sq
 function runGloWorm(days,grazingEnd,fec,ewes,lambs,ha,biomass,sp){
   var dailyEggsPerHa=(fec*(ewes*200+lambs*100))/ha;
   var dilution=Math.min(1,1500/Math.max(biomass,100));
-  var rainHistory=[],E=0,L=0,L3f=0,L3p=0,out=[];
+  var rainHistory=[],petHistory=[],E=0,L=0,L3f=0,L3p=0,out=[];
   for(var i=0;i<days.length;i++){
     var d=days[i];
-    var T=d.temp!=null?d.temp:10, R=d.rain!=null?d.rain:0;
+    var T=d.temp!=null?d.temp:10;
+    var R=d.rain!=null?d.rain:0;
+    var pet=petMM(T);
     rainHistory.push(R);
-    if(rainHistory.length>10) rainHistory.shift();
+    petHistory.push(pet);
+    if(rainHistory.length>10){rainHistory.shift();petHistory.shift();}
+
     var delta=Math.min(1,Math.max(0,sp.devA+sp.devB*T));
     var mu1=polyMu(sp.mu12c,T),mu2=mu1;
     var mu4=polyMu(sp.mu4c,T);
     var mu3=sp.mu3fromMu4?Math.min(1,mu4*10):polyMu(sp.mu3c,T);
-    var mu5=mu3, m2=calcM2(T);
-    var C=1.0;
+    var mu5=mu3,m2=calcM2(T);
+
+    // Cumulative P/E over species-specific window for both
+    // development correction (C) and migration (m1)
+    var peRatio=1.0;
     if(sp.peWindow>0){
-      var wl=Math.min(sp.peWindow,rainHistory.length),cp=0,ce=0;
-      for(var w=rainHistory.length-wl;w<rainHistory.length;w++){cp+=rainHistory[w];ce+=petMM(T);}
-      if(cp/Math.max(ce,0.01)<1) C=sp.C;
+      var wl=Math.min(sp.peWindow,rainHistory.length);
+      var cp=0,ce=0;
+      for(var w=rainHistory.length-wl;w<rainHistory.length;w++){
+        cp+=rainHistory[w];ce+=petHistory[w];
+      }
+      peRatio=cp/Math.max(ce,0.01);
     }
-    var m1=R>=2?sp.m1opt:(R>0?sp.m1sub:sp.m1dry);
+
+    // Development correction C
+    var C=(sp.peWindow>0&&peRatio<1)?sp.C:1.0;
+
+    // Horizontal migration m1 — purely from rainfall and trailing P/E
+    // per Rose et al. 2015 Table 2:
+    // optimal:     R >= 2mm
+    // sub-optimal: R < 2mm AND trailing P/E >= 1
+    // dry:         R < 2mm AND trailing P/E < 1
+    var m1;
+    if(R>=2){
+      m1=sp.m1opt;
+    } else if(sp.peWindow>0&&peRatio>=1){
+      m1=sp.m1sub;
+    } else if(sp.peWindow===0&&R>=2){
+      m1=sp.m1opt; // OO only migrates with rainfall
+    } else {
+      m1=sp.m1dry;
+    }
+
     var Enew=d.date<=grazingEnd?dailyEggsPerHa*C:0;
     var dE=-(mu1+2*delta)*E+Enew;
     var dL=-(mu2+2*delta)*L+2*delta*E;
     var dL3f=-(mu3+m1)*L3f+2*delta*L;
     var dL3p=-(mu4*(1-m2)+mu5*m2)*L3p+m1*L3f;
-    E=Math.max(0,E+dE); L=Math.max(0,L+dL);
+    E=Math.max(0,E+dE);L=Math.max(0,L+dL);
     L3f=Math.max(0,L3f+dL3f);
     L3p=Math.max(0,(L3p+dL3p)*dilution);
     out.push({date:d.date,larval:L3p});
@@ -215,8 +242,7 @@ async function getWeather(start){
   if(!data.data||!data.data.length) throw new Error('No weather data returned from Meteostat for '+start+' to '+TODAY+'.');
   return data.data.map(function(d){
     return {date:d.date,temp:d.tavg,rain:d.prcp||0,solar:d.tsun!=null?(d.tsun/60)*2:10};
-  });
-}
+  });}
 
 // ── Key prompt ────────────────────────────────────────────────────────────────
 function showKeyPrompt(){

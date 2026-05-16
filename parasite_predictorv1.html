@@ -208,32 +208,36 @@ async function getWeather(start){
   var forecastEnd=new Date(TODAY);
   forecastEnd.setDate(forecastEnd.getDate()+14);
   var forecastEndStr=forecastEnd.toISOString().slice(0,10);
-  // Start forecast from tomorrow
   var forecastStart=new Date(TODAY);
   forecastStart.setDate(forecastStart.getDate()+1);
   var forecastStartStr=forecastStart.toISOString().slice(0,10);
 
-  var fcastUrl='https://api.open-meteo.com/v1/forecast?latitude='+LAT+'&longitude='+LON
-    +'&daily=temperature_2m_mean,precipitation_sum,sunshine_duration'
-    +'&start_date='+forecastStartStr+'&end_date='+forecastEndStr
-    +'&timezone=Europe%2FLondon';
-  var fcastResp;
-  try{fcastResp=await fetch(fcastUrl);}
-  catch(e){throw new Error('Could not reach Open-Meteo forecast API. ('+e.message+')');}
-  if(!fcastResp.ok) throw new Error('Open-Meteo forecast API error (HTTP '+fcastResp.status+').');
-  var fcastData=await fcastResp.json();
-  if(!fcastData.daily||!fcastData.daily.time||!fcastData.daily.time.length) throw new Error('No forecast data returned from Open-Meteo.');
-  var forecast=fcastData.daily.time.map(function(date,i){
-    return {
-      date:date,
-      temp:fcastData.daily.temperature_2m_mean[i],
-      rain:fcastData.daily.precipitation_sum[i]||0,
-      solar:fcastData.daily.sunshine_duration[i]!=null?(fcastData.daily.sunshine_duration[i]/3600)*2:10,
-      forecast:true
-    };
-  });
+  var forecast=[];
+  try{
+    var fcastUrl='https://api.open-meteo.com/v1/forecast?latitude='+LAT+'&longitude='+LON
+      +'&daily=temperature_2m_mean,precipitation_sum,sunshine_duration'
+      +'&start_date='+forecastStartStr+'&end_date='+forecastEndStr
+      +'&timezone=Europe%2FLondon';
+    var fcastResp=await fetch(fcastUrl);
+    if(fcastResp.ok){
+      var fcastData=await fcastResp.json();
+      if(fcastData.daily&&fcastData.daily.time&&fcastData.daily.time.length){
+        forecast=fcastData.daily.time.map(function(date,i){
+          return {
+            date:date,
+            temp:fcastData.daily.temperature_2m_mean[i]||10,
+            rain:fcastData.daily.precipitation_sum[i]||0,
+            solar:fcastData.daily.sunshine_duration[i]!=null?(fcastData.daily.sunshine_duration[i]/3600)*2:10,
+            forecast:true
+          };
+        });
+      }
+    }
+  }catch(e){
+    console.warn('Forecast fetch failed:',e.message);
+  }
 
-  return {historical:historical, forecast:forecast, forecastStartStr:forecastStartStr};
+  return {historical:historical, forecast:forecast, forecastStartStr:forecastStartStr||null};
 }
 
 // ── Key prompt ────────────────────────────────────────────────────────────────
@@ -378,7 +382,11 @@ function drawParasiteOnCanvas(canvas,spResults,grazingEnd,forecastStart,W,H){
     var spDays=spResults[sp.key].days;
     // Find index where forecast starts
     var fIdx=spDays.length;
-    for(var i=0;i<spDays.length;i++){if(spDays[i].date>=forecastStart){fIdx=i;break;}}
+    if(forecastStart){
+      for(var i=0;i<spDays.length;i++){
+        if(spDays[i].date>=forecastStart){fIdx=i;break;}
+      }
+    }
 
     // Solid historical segment
     ctx.strokeStyle=sp.color;ctx.lineWidth=2;ctx.lineJoin='round';ctx.setLineDash([]);ctx.beginPath();

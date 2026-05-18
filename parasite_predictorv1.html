@@ -156,8 +156,10 @@ function petMM(T){if(T<=0)return 0.1;return Math.max(0.1,0.0023*(T+17.8)*Math.sq
 function runGloWorm(days,grazingEnd,fec,ewes,lambs,ha,sp){
   var dailyEggsPerHa=(fec*(ewes*200+lambs*100))/ha;
   var rainHistory=[],petHistory=[],E=0,L=0,L3f=0,L3p=0,out=[];
+  var eggDays=0, noEggDays=0;
   for(var i=0;i<days.length;i++){
     var d=days[i];
+    var dDate=d.date.slice(0,10);
     var T=d.temp!=null?d.temp:10,R=d.rain!=null?d.rain:0;
     rainHistory.push(R);petHistory.push(petMM(T));
     if(rainHistory.length>10){rainHistory.shift();petHistory.shift();}
@@ -174,7 +176,9 @@ function runGloWorm(days,grazingEnd,fec,ewes,lambs,ha,sp){
     }
     var C=(sp.peWindow>0&&peRatio<1)?sp.C:1.0;
     var m1=R>=2?sp.m1opt:(sp.peWindow>0&&peRatio>=1?sp.m1sub:sp.m1dry);
-    var Enew=d.date.slice(0,10)<=grazingEnd?dailyEggsPerHa*C:0;
+    var depositing=dDate<=grazingEnd;
+    var Enew=depositing?dailyEggsPerHa*C:0;
+    if(depositing) eggDays++; else noEggDays++;
     var dE=-(mu1+2*delta)*E+Enew;
     var dL=-(mu2+2*delta)*L+2*delta*E;
     var dL3f=-(mu3+m1)*L3f+2*delta*L;
@@ -182,11 +186,13 @@ function runGloWorm(days,grazingEnd,fec,ewes,lambs,ha,sp){
     E=Math.max(0,E+dE);L=Math.max(0,L+dL);
     L3f=Math.max(0,L3f+dL3f);
     L3p=Math.max(0,L3p+dL3p);
-    out.push({date:d.date,larval:L3p});
+    out.push({date:dDate,larval:L3p});
   }
   var peak=out.length?Math.max.apply(null,out.map(function(x){return x.larval;})):0;
   var current=out.length?out[out.length-1].larval:0;
-  return {days:out,peak:peak,current:current,riskLevel:riskLevel(current)};
+  // Store debug info
+  out._debug='grazingEnd='+grazingEnd+' eggDays='+eggDays+' noEggDays='+noEggDays+' firstDate='+out[0].date+' lastDate='+out[out.length-1].date;
+  return {days:out,peak:peak,current:current,riskLevel:riskLevel(current),debug:out._debug};
 }
 
 // ── Weather ───────────────────────────────────────────────────────────────────
@@ -517,6 +523,8 @@ function renderMain(){
     +'<div class="cards3">'+cards+'</div>'
     +'<div class="card"><h3>L3 Larval Density — '+f.start+' to Today ('+TODAY+')</h3>'
     +'<div style="margin-bottom:10px">'+leg+'<span style="font-size:11px;color:#aaa;margin-left:8px">— — 14-day forecast</span></div>'
+    +'<div style="font-size:11px;color:#888;margin-bottom:8px;font-family:monospace">'+sp['hc'].debug+'</div>'
+    +'<div style="font-size:11px;color:#888;margin-bottom:8px;font-family:monospace">'+sp['tc'].debug+'</div>'
     +'<div class="chart-wrap" id="cParWrap" title="Click to expand"><canvas id="cMain"></canvas></div></div>'
     +'<div class="card"><h3>Weather — '+f.start+' to Today · Herstmonceux station (03882)</h3>'
     +'<div class="wleg">'

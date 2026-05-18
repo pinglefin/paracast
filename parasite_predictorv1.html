@@ -174,7 +174,7 @@ function runGloWorm(days,grazingEnd,fec,ewes,lambs,ha,sp){
     }
     var C=(sp.peWindow>0&&peRatio<1)?sp.C:1.0;
     var m1=R>=2?sp.m1opt:(sp.peWindow>0&&peRatio>=1?sp.m1sub:sp.m1dry);
-    var Enew=d.date<=grazingEnd?dailyEggsPerHa*C:0;
+    var Enew=d.date.slice(0,10)<=grazingEnd?dailyEggsPerHa*C:0;
     var dE=-(mu1+2*delta)*E+Enew;
     var dL=-(mu2+2*delta)*L+2*delta*E;
     var dL3f=-(mu3+m1)*L3f+2*delta*L;
@@ -361,7 +361,7 @@ function drawParasiteOnCanvas(canvas,spResults,grazingEnd,forecastStart,W,H){
     ctx.strokeStyle='#ececec';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(pl,gy);ctx.lineTo(pl+cw,gy);ctx.stroke();
   });
   ctx.strokeStyle='#ccc';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(pl,pt);ctx.lineTo(pl,pt+ch);ctx.lineTo(pl+cw,pt+ch);ctx.stroke();
-  function dateX(ds){for(var i=0;i<days0.length;i++)if(days0[i].date>=ds)return pl+(i/Math.max(n-1,1))*cw;return pl+cw;}
+  function dateX(ds){for(var i=0;i<days0.length;i++)if(days0[i].date.slice(0,10)>=ds)return pl+(i/Math.max(n-1,1))*cw;return pl+cw;}
 
   // Grazing end marker
   var gx=dateX(grazingEnd);
@@ -384,7 +384,7 @@ function drawParasiteOnCanvas(canvas,spResults,grazingEnd,forecastStart,W,H){
     var fIdx=spDays.length;
     if(forecastStart){
       for(var i=0;i<spDays.length;i++){
-        if(spDays[i].date>=forecastStart){fIdx=i;break;}
+        if(spDays[i].date.slice(0,10)>=forecastStart){fIdx=i;break;}
       }
     }
 
@@ -435,7 +435,7 @@ function drawWeatherOnCanvas(canvas,weather,grazingEnd,W,H){
     ctx.fillStyle='#aaa';ctx.textAlign='left';ctx.fillText((frac*maxR).toFixed(1)+'mm',pl+cw+3,gy+3);
   });
   ctx.strokeStyle='#ccc';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(pl,pt);ctx.lineTo(pl,pt+ch);ctx.lineTo(pl+cw,pt+ch);ctx.stroke();
-  function dateX(ds){for(var i=0;i<weather.length;i++)if(weather[i].date>=ds)return pl+(i/Math.max(n-1,1))*cw;return pl+cw;}
+  function dateX(ds){for(var i=0;i<weather.length;i++)if(weather[i].date.slice(0,10)>=ds)return pl+(i/Math.max(n-1,1))*cw;return pl+cw;}
   var gx=dateX(grazingEnd);
   ctx.strokeStyle='#ccc';ctx.lineWidth=1;ctx.setLineDash([3,3]);ctx.beginPath();ctx.moveTo(gx,pt);ctx.lineTo(gx,pt+ch);ctx.stroke();
   ctx.setLineDash([]);ctx.fillStyle='#aaa';ctx.textAlign='left';ctx.font='9px system-ui';ctx.fillText('Grazing end',gx+3,pt+10);

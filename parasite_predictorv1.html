@@ -508,11 +508,10 @@ function renderMain(){
     return '<div class="rcard" style="background:'+RB[rl]+';border-color:'+RBD[rl]+'">'
       +'<div class="spname" style="color:'+RT[rl]+'"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:'+s.color+';margin-right:5px;vertical-align:middle"></span>'+s.name+'</div>'
       +'<div class="rl" style="color:'+RC[rl]+'">'+rl+'</div>'
-      +'<div class="idx" style="color:'+RT[rl]+'">L3 herbage today: '+Math.round(sr.currentH).toLocaleString()+' /ha</div>'
-      +'<div class="rb"><div class="rbf" style="width:'+pct+'%;background:'+RC[rl]+'"></div></div>'
+      +'<div class="idx" style="color:'+RT[rl]+'">L3 herbage today: '+Math.round(sr.currentH).toLocaleString()+' /ha</div>'      +'<div class="rb"><div class="rbf" style="width:'+pct+'%;background:'+RC[rl]+'"></div></div>'
       +'<div class="rec" style="color:'+RT[rl]+'">'+RECS[rl]+'</div></div>';
   }).join('');
-  var leg=SPECIES.map(function(s){return '<span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:#6c757d;margin-right:14px"><span style="display:inline-block;width:22px;height:3px;border-radius:2px;background:'+s.color+'"></span>'+s.name+' (total)</span><span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:#6c757d;margin-right:14px"><span style="display:inline-block;width:22px;height:2px;border-radius:2px;background:'+s.color+';opacity:.5"></span>'+s.name+' (herbage)</span>';}).join('');
+  var leg=SPECIES.map(function(s){return '<span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:#6c757d;margin-right:14px"><span style="display:inline-block;width:22px;height:3px;border-radius:2px;background:'+s.color+'"></span>'+s.name+'</span>';}).join('');
   el.innerHTML='<div class="dh"><div><h2>'+f.name+'</h2>'
     +'<div class="meta">'+f.ha+' ha · '+f.ewes+' ewes · '+f.lambs+' lambs · '
     +Math.round(f.stockDensity*10)/10+' /ha · FEC '+f.fec+' epg · '+f.start+' → '+f.end+'</div>'

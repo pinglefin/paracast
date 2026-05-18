@@ -156,21 +156,17 @@ function petMM(T){if(T<=0)return 0.1;return Math.max(0.1,0.0023*(T+17.8)*Math.sq
 function runGloWorm(days,grazingEnd,fec,ewes,lambs,ha,sp){
   var dailyEggsPerHa=(fec*(ewes*200+lambs*100))/ha;
   var rainHistory=[],petHistory=[],E=0,L=0,L3f=0,L3p=0,out=[];
-  var SUBSTEPS=24; // sub-daily steps for numerical accuracy
-
   for(var i=0;i<days.length;i++){
     var d=days[i];
     var dDate=d.date.slice(0,10);
     var T=d.temp!=null?d.temp:10,R=d.rain!=null?d.rain:0;
     rainHistory.push(R);petHistory.push(petMM(T));
     if(rainHistory.length>10){rainHistory.shift();petHistory.shift();}
-
     var delta=Math.min(1,Math.max(0,sp.devA+sp.devB*T));
     var mu1=polyMu(sp.mu12c,T),mu2=mu1;
     var mu4=polyMu(sp.mu4c,T);
     var mu3=sp.mu3fromMu4?Math.min(1,mu4*10):polyMu(sp.mu3c,T);
     var mu5=mu3,m2=calcM2(T);
-
     var peRatio=1.0;
     if(sp.peWindow>0){
       var wl=Math.min(sp.peWindow,rainHistory.length),cp=0,ce=0;
@@ -179,36 +175,22 @@ function runGloWorm(days,grazingEnd,fec,ewes,lambs,ha,sp){
     }
     var C=(sp.peWindow>0&&peRatio<1)?sp.C:1.0;
     var m1=R>=2?sp.m1opt:(sp.peWindow>0&&peRatio>=1?sp.m1sub:sp.m1dry);
-    var depositing=dDate<=grazingEnd;
-
-    // Daily egg input split across substeps
-    var EnewPerStep=depositing?(dailyEggsPerHa*C/SUBSTEPS):0;
-    var dt=1.0/SUBSTEPS;
-
-    // RK4 integration with SUBSTEPS per day
-    for(var s=0;s<SUBSTEPS;s++){
-      var deriv=function(e,l,l3f,l3p){
-        return [
-          -(mu1+2*delta)*e + EnewPerStep/dt,
-          -(mu2+2*delta)*l + 2*delta*e,
-          -(mu3+m1)*l3f   + 2*delta*l,
-          -(mu4*(1-m2)+mu5*m2)*l3p + m1*l3f
-        ];
-      };
-      var k1=deriv(E,L,L3f,L3p);
-      var k2=deriv(E+dt/2*k1[0],L+dt/2*k1[1],L3f+dt/2*k1[2],L3p+dt/2*k1[3]);
-      var k3=deriv(E+dt/2*k2[0],L+dt/2*k2[1],L3f+dt/2*k2[2],L3p+dt/2*k2[3]);
-      var k4=deriv(E+dt*k3[0],L+dt*k3[1],L3f+dt*k3[2],L3p+dt*k3[3]);
-      E   =Math.max(0,E   +dt/6*(k1[0]+2*k2[0]+2*k3[0]+k4[0]));
-      L   =Math.max(0,L   +dt/6*(k1[1]+2*k2[1]+2*k3[1]+k4[1]));
-      L3f =Math.max(0,L3f +dt/6*(k1[2]+2*k2[2]+2*k3[2]+k4[2]));
-      L3p =Math.max(0,L3p +dt/6*(k1[3]+2*k2[3]+2*k3[3]+k4[3]));
-    }
-    out.push({date:dDate,larval:L3p});
+    var Enew=dDate<=grazingEnd?dailyEggsPerHa*C:0;
+    var dE  =-(mu1+2*delta)*E+Enew;
+    var dL  =-(mu2+2*delta)*L+2*delta*E;
+    var dL3f=-(mu3+m1)*L3f+2*delta*L;
+    var dL3p=-(mu4*(1-m2)+mu5*m2)*L3p+m1*L3f;
+    E   =Math.max(0,E+dE);
+    L   =Math.max(0,L+dL);
+    L3f =Math.max(0,L3f+dL3f);
+    L3p =Math.max(0,L3p+dL3p);
+    var L3h=L3p*m2; // L3 on herbage = proportion of total pasture L3
+    out.push({date:dDate,larval:L3p,larvalH:L3h});
   }
   var peak=out.length?Math.max.apply(null,out.map(function(x){return x.larval;})):0;
   var current=out.length?out[out.length-1].larval:0;
-  return {days:out,peak:peak,current:current,riskLevel:riskLevel(current)};
+  var currentH=out.length?out[out.length-1].larvalH:0;
+  return {days:out,peak:peak,current:current,currentH:currentH,riskLevel:riskLevel(currentH)};
 }
 
 // ── Weather ───────────────────────────────────────────────────────────────────
@@ -399,35 +381,37 @@ function drawParasiteOnCanvas(canvas,spResults,grazingEnd,forecastStart,W,H){
   ctx.fillStyle='rgba(0,0,0,0.03)';
   ctx.fillRect(fx,pt,pl+cw-fx,ch);
 
-  // Draw species lines — solid historical, dashed forecast
+  // Draw species lines — solid total L3p, dashed L3 on herbage
   SPECIES.forEach(function(sp){
     var spDays=spResults[sp.key].days;
-    // Find index where forecast starts
     var fIdx=spDays.length;
     if(forecastStart){
-      for(var i=0;i<spDays.length;i++){
-        if(spDays[i].date.slice(0,10)>=forecastStart){fIdx=i;break;}
-      }
+      for(var i=0;i<spDays.length;i++){if(spDays[i].date.slice(0,10)>=forecastStart){fIdx=i;break;}}
     }
 
-    // Solid historical segment
+    // Total L3p — solid historical, dashed forecast
     ctx.strokeStyle=sp.color;ctx.lineWidth=2;ctx.lineJoin='round';ctx.setLineDash([]);ctx.beginPath();
     for(var i=0;i<Math.min(fIdx+1,spDays.length);i++){
       var px=pl+(i/Math.max(n-1,1))*cw,py=pt+ch-(spDays[i].larval/mx)*ch;
       if(i===0)ctx.moveTo(px,py);else ctx.lineTo(px,py);
     }
     ctx.stroke();
-
-    // Dashed forecast segment
     if(fIdx<spDays.length){
       ctx.strokeStyle=sp.color;ctx.lineWidth=2;ctx.setLineDash([6,4]);ctx.beginPath();
       for(var i=Math.max(0,fIdx-1);i<spDays.length;i++){
         var px=pl+(i/Math.max(n-1,1))*cw,py=pt+ch-(spDays[i].larval/mx)*ch;
         if(i===Math.max(0,fIdx-1))ctx.moveTo(px,py);else ctx.lineTo(px,py);
       }
-      ctx.stroke();
-      ctx.setLineDash([]);
+      ctx.stroke();ctx.setLineDash([]);
     }
+
+    // L3 on herbage — thinner line, same colour, more transparent
+    ctx.strokeStyle=sp.color;ctx.lineWidth=1;ctx.globalAlpha=0.5;ctx.setLineDash([2,2]);ctx.beginPath();
+    for(var i=0;i<Math.min(fIdx+1,spDays.length);i++){
+      var px=pl+(i/Math.max(n-1,1))*cw,py=pt+ch-(spDays[i].larvalH/mx)*ch;
+      if(i===0)ctx.moveTo(px,py);else ctx.lineTo(px,py);
+    }
+    ctx.stroke();ctx.globalAlpha=1.0;ctx.setLineDash([]);
   });
 
   // X axis labels
@@ -524,11 +508,11 @@ function renderMain(){
     return '<div class="rcard" style="background:'+RB[rl]+';border-color:'+RBD[rl]+'">'
       +'<div class="spname" style="color:'+RT[rl]+'"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:'+s.color+';margin-right:5px;vertical-align:middle"></span>'+s.name+'</div>'
       +'<div class="rl" style="color:'+RC[rl]+'">'+rl+'</div>'
-      +'<div class="idx" style="color:'+RT[rl]+'">L3 today: '+Math.round(sr.current).toLocaleString()+' /ha</div>'
+      +'<div class="idx" style="color:'+RT[rl]+'">L3 herbage today: '+Math.round(sr.currentH).toLocaleString()+' /ha</div>'
       +'<div class="rb"><div class="rbf" style="width:'+pct+'%;background:'+RC[rl]+'"></div></div>'
       +'<div class="rec" style="color:'+RT[rl]+'">'+RECS[rl]+'</div></div>';
   }).join('');
-  var leg=SPECIES.map(function(s){return '<span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:#6c757d;margin-right:14px"><span style="display:inline-block;width:22px;height:3px;border-radius:2px;background:'+s.color+'"></span>'+s.name+'</span>';}).join('');
+  var leg=SPECIES.map(function(s){return '<span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:#6c757d;margin-right:14px"><span style="display:inline-block;width:22px;height:3px;border-radius:2px;background:'+s.color+'"></span>'+s.name+' (total)</span><span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:#6c757d;margin-right:14px"><span style="display:inline-block;width:22px;height:2px;border-radius:2px;background:'+s.color+';opacity:.5"></span>'+s.name+' (herbage)</span>';}).join('');
   el.innerHTML='<div class="dh"><div><h2>'+f.name+'</h2>'
     +'<div class="meta">'+f.ha+' ha · '+f.ewes+' ewes · '+f.lambs+' lambs · '
     +Math.round(f.stockDensity*10)/10+' /ha · FEC '+f.fec+' epg · '+f.start+' → '+f.end+'</div>'

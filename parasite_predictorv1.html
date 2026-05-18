@@ -411,7 +411,7 @@ function drawParasiteOnCanvas(canvas,spResults,grazingEnd,forecastStart,W,H){
   // X axis labels
   ctx.fillStyle='#aaa';ctx.textAlign='center';ctx.font='10px system-ui';ctx.setLineDash([]);
   var skip=Math.max(1,Math.floor(n/8));
-  for(var i=0;i<n;i++)if(i%skip===0||i===n-1)ctx.fillText(days0[i].date.slice(5),pl+(i/Math.max(n-1,1))*cw,H-8);
+  for(var i=0;i<n;i++)if(i%skip===0||i===n-1)ctx.fillText(days0[i].date.slice(0,10).slice(5),pl+(i/Math.max(n-1,1))*cw,H-8);
 }
 
 function drawWeatherOnCanvas(canvas,weather,grazingEnd,W,H){
@@ -448,7 +448,7 @@ function drawWeatherOnCanvas(canvas,weather,grazingEnd,W,H){
   ctx.strokeStyle='#e74c3c';ctx.lineWidth=2;ctx.lineJoin='round';ctx.beginPath();
   temps.forEach(function(v,i){var x=pl+(i/Math.max(n-1,1))*cw,y=pt+ch-((v-minT)/(maxT-minT||1))*ch;if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);});ctx.stroke();
   ctx.fillStyle='#aaa';ctx.textAlign='center';ctx.font='9px system-ui';ctx.setLineDash([]);
-  for(var i=0;i<n;i++)if(i%skip===0||i===n-1)ctx.fillText(weather[i].date.slice(5),pl+(i/Math.max(n-1,1))*cw,H-8);
+  for(var i=0;i<n;i++)if(i%skip===0||i===n-1)ctx.fillText(weather[i].date.slice(0,10).slice(5),pl+(i/Math.max(n-1,1))*cw,H-8);
 }
 
 function sizeCanvas(id,drawFn,H){
@@ -487,7 +487,13 @@ function renderMain(){
     return;
   }
   if(f.status==='error'){
-    el.innerHTML='<div style="max-width:560px"><div class="err"><strong>Error:</strong> '+f.error+'</div></div>';
+    el.innerHTML='<div style="max-width:560px"><div class="err"><strong>Error:</strong> '+f.error+'</div>'
+      +'<button id="btnDelErr" class="btn-red btn-sm" style="margin-top:12px">Delete Field</button></div>';
+    document.getElementById('btnDelErr').addEventListener('click',function(){
+      var fid=selId;if(!confirm('Delete this field?'))return;
+      fields=fields.filter(function(x){return x.id!==fid;});
+      saveFields();selId=null;renderSidebar();renderMain();
+    });
     return;
   }
   var r=f.result,sp=r.species;

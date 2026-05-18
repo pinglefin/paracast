@@ -156,18 +156,21 @@ function petMM(T){if(T<=0)return 0.1;return Math.max(0.1,0.0023*(T+17.8)*Math.sq
 function runGloWorm(days,grazingEnd,fec,ewes,lambs,ha,sp){
   var dailyEggsPerHa=(fec*(ewes*200+lambs*100))/ha;
   var rainHistory=[],petHistory=[],E=0,L=0,L3f=0,L3p=0,out=[];
-  var eggDays=0, noEggDays=0;
+  var SUBSTEPS=24; // sub-daily steps for numerical accuracy
+
   for(var i=0;i<days.length;i++){
     var d=days[i];
     var dDate=d.date.slice(0,10);
     var T=d.temp!=null?d.temp:10,R=d.rain!=null?d.rain:0;
     rainHistory.push(R);petHistory.push(petMM(T));
     if(rainHistory.length>10){rainHistory.shift();petHistory.shift();}
+
     var delta=Math.min(1,Math.max(0,sp.devA+sp.devB*T));
     var mu1=polyMu(sp.mu12c,T),mu2=mu1;
     var mu4=polyMu(sp.mu4c,T);
     var mu3=sp.mu3fromMu4?Math.min(1,mu4*10):polyMu(sp.mu3c,T);
     var mu5=mu3,m2=calcM2(T);
+
     var peRatio=1.0;
     if(sp.peWindow>0){
       var wl=Math.min(sp.peWindow,rainHistory.length),cp=0,ce=0;
@@ -177,22 +180,35 @@ function runGloWorm(days,grazingEnd,fec,ewes,lambs,ha,sp){
     var C=(sp.peWindow>0&&peRatio<1)?sp.C:1.0;
     var m1=R>=2?sp.m1opt:(sp.peWindow>0&&peRatio>=1?sp.m1sub:sp.m1dry);
     var depositing=dDate<=grazingEnd;
-    var Enew=depositing?dailyEggsPerHa*C:0;
-    if(depositing) eggDays++; else noEggDays++;
-    var dE=-(mu1+2*delta)*E+Enew;
-    var dL=-(mu2+2*delta)*L+2*delta*E;
-    var dL3f=-(mu3+m1)*L3f+2*delta*L;
-    var dL3p=-(mu4*(1-m2)+mu5*m2)*L3p+m1*L3f;
-    E=Math.max(0,E+dE);L=Math.max(0,L+dL);
-    L3f=Math.max(0,L3f+dL3f);
-    L3p=Math.max(0,L3p+dL3p);
+
+    // Daily egg input split across substeps
+    var EnewPerStep=depositing?(dailyEggsPerHa*C/SUBSTEPS):0;
+    var dt=1.0/SUBSTEPS;
+
+    // RK4 integration with SUBSTEPS per day
+    for(var s=0;s<SUBSTEPS;s++){
+      var deriv=function(e,l,l3f,l3p){
+        return [
+          -(mu1+2*delta)*e + EnewPerStep/dt,
+          -(mu2+2*delta)*l + 2*delta*e,
+          -(mu3+m1)*l3f   + 2*delta*l,
+          -(mu4*(1-m2)+mu5*m2)*l3p + m1*l3f
+        ];
+      };
+      var k1=deriv(E,L,L3f,L3p);
+      var k2=deriv(E+dt/2*k1[0],L+dt/2*k1[1],L3f+dt/2*k1[2],L3p+dt/2*k1[3]);
+      var k3=deriv(E+dt/2*k2[0],L+dt/2*k2[1],L3f+dt/2*k2[2],L3p+dt/2*k2[3]);
+      var k4=deriv(E+dt*k3[0],L+dt*k3[1],L3f+dt*k3[2],L3p+dt*k3[3]);
+      E   =Math.max(0,E   +dt/6*(k1[0]+2*k2[0]+2*k3[0]+k4[0]));
+      L   =Math.max(0,L   +dt/6*(k1[1]+2*k2[1]+2*k3[1]+k4[1]));
+      L3f =Math.max(0,L3f +dt/6*(k1[2]+2*k2[2]+2*k3[2]+k4[2]));
+      L3p =Math.max(0,L3p +dt/6*(k1[3]+2*k2[3]+2*k3[3]+k4[3]));
+    }
     out.push({date:dDate,larval:L3p});
   }
   var peak=out.length?Math.max.apply(null,out.map(function(x){return x.larval;})):0;
   var current=out.length?out[out.length-1].larval:0;
-  // Store debug info
-  out._debug='grazingEnd='+grazingEnd+' eggDays='+eggDays+' noEggDays='+noEggDays+' firstDate='+out[0].date+' lastDate='+out[out.length-1].date;
-  return {days:out,peak:peak,current:current,riskLevel:riskLevel(current),debug:out._debug};
+  return {days:out,peak:peak,current:current,riskLevel:riskLevel(current)};
 }
 
 // ── Weather ───────────────────────────────────────────────────────────────────

@@ -321,7 +321,7 @@ async function saveField(){
     var avgSolar =h.reduce(function(a,b){return a+(b.solar||0);},0)/h.length;
     for(var i=0;i<fields.length;i++) if(fields[i].id===id){
       fields[i].status='done';
-      fields[i].result={species:spResults,weather:allDays,avgTemp:avgTemp,totalRain:totalRain,avgSolar:avgSolar,forecastStart:weather.forecastStartStr};
+      fields[i].result={species:spResults,weather:allDays,avgTemp:avgTemp,totalRain:totalRain,avgSolar:avgSolar,forecastStart:forecastStart};
       break;
     }
     saveFields();
@@ -420,7 +420,7 @@ function drawParasiteOnCanvas(canvas,spResults,grazingEnd,forecastStart,W,H){
   for(var i=0;i<n;i++)if(i%skip===0||i===n-1)ctx.fillText(days0[i].date.slice(0,10).slice(5),pl+(i/Math.max(n-1,1))*cw,H-8);
 }
 
-function drawWeatherOnCanvas(canvas,weather,grazingEnd,W,H){
+function drawWeatherOnCanvas(canvas,weather,grazingEnd,forecastStart,W,H){
   var ctx=canvas.getContext('2d');ctx.clearRect(0,0,W,H);
   var pl=46,pr=46,pt=14,pb=28,cw=W-pl-pr,ch=H-pt-pb;
   var n=weather.length;if(!n)return;
@@ -447,16 +447,53 @@ function drawWeatherOnCanvas(canvas,weather,grazingEnd,W,H){
   ctx.setLineDash([]);ctx.fillStyle='#aaa';ctx.textAlign='left';ctx.font='9px system-ui';ctx.fillText('Grazing end',gx+3,pt+10);
   ctx.strokeStyle='#888';ctx.lineWidth=1;ctx.setLineDash([4,3]);ctx.beginPath();ctx.moveTo(pl+cw,pt);ctx.lineTo(pl+cw,pt+ch);ctx.stroke();
   ctx.setLineDash([]);ctx.fillStyle='#555';ctx.textAlign='right';ctx.fillText('Today',pl+cw-3,pt+10);
+  // Shaded forecast region
+  if(forecastStart){
+    var fx=dateX(forecastStart);
+    ctx.fillStyle='rgba(0,0,0,0.03)';
+    ctx.fillRect(fx,pt,pl+cw-fx,ch);
+    ctx.strokeStyle='#555';ctx.lineWidth=1.5;ctx.setLineDash([4,3]);
+    ctx.beginPath();ctx.moveTo(fx,pt);ctx.lineTo(fx,pt+ch);ctx.stroke();
+    ctx.setLineDash([]);ctx.fillStyle='#555';ctx.textAlign='left';ctx.font='9px system-ui';
+    ctx.fillText('Today',fx+3,pt+10);
+  }
+
+  // Find forecast index
+  var fIdx=weather.length;
+  if(forecastStart){
+    for(var i=0;i<weather.length;i++){if(weather[i].date.slice(0,10)>=forecastStart){fIdx=i;break;}}
+  }
+
+  // Rainfall bars — solid historical, lighter forecast
   var bw=Math.max(1,cw/n-1);
-  rains.forEach(function(r,i){var x=pl+(i/Math.max(n-1,1))*cw-bw/2,bh=(r/maxR)*ch*0.6;ctx.fillStyle='rgba(52,152,219,0.5)';ctx.fillRect(x,pt+ch-bh,bw,bh);});
-  ctx.strokeStyle='#f39c12';ctx.lineWidth=1.5;ctx.lineJoin='round';ctx.beginPath();
-  sunHrs.forEach(function(v,i){var x=pl+(i/Math.max(n-1,1))*cw,y=pt+ch-(v/maxSun)*ch;if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);});ctx.stroke();
-  ctx.strokeStyle='#e74c3c';ctx.lineWidth=2;ctx.lineJoin='round';ctx.beginPath();
-  temps.forEach(function(v,i){var x=pl+(i/Math.max(n-1,1))*cw,y=pt+ch-((v-minT)/(maxT-minT||1))*ch;if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);});ctx.stroke();
+  rains.forEach(function(r,i){
+    var x=pl+(i/Math.max(n-1,1))*cw-bw/2,bh=(r/maxR)*ch*0.6;
+    ctx.fillStyle=i>=fIdx?'rgba(52,152,219,0.25)':'rgba(52,152,219,0.5)';
+    ctx.fillRect(x,pt+ch-bh,bw,bh);
+  });
+
+  // Sun hours — solid historical, dashed forecast
+  ctx.strokeStyle='#f39c12';ctx.lineWidth=1.5;ctx.lineJoin='round';ctx.setLineDash([]);ctx.beginPath();
+  for(var i=0;i<Math.min(fIdx+1,n);i++){var x=pl+(i/Math.max(n-1,1))*cw,y=pt+ch-(sunHrs[i]/maxSun)*ch;if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);}
+  ctx.stroke();
+  if(fIdx<n){
+    ctx.setLineDash([6,4]);ctx.beginPath();
+    for(var i=Math.max(0,fIdx-1);i<n;i++){var x=pl+(i/Math.max(n-1,1))*cw,y=pt+ch-(sunHrs[i]/maxSun)*ch;if(i===Math.max(0,fIdx-1))ctx.moveTo(x,y);else ctx.lineTo(x,y);}
+    ctx.stroke();ctx.setLineDash([]);
+  }
+
+  // Temperature — solid historical, dashed forecast
+  ctx.strokeStyle='#e74c3c';ctx.lineWidth=2;ctx.lineJoin='round';ctx.setLineDash([]);ctx.beginPath();
+  for(var i=0;i<Math.min(fIdx+1,n);i++){var x=pl+(i/Math.max(n-1,1))*cw,y=pt+ch-((temps[i]-minT)/(maxT-minT||1))*ch;if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);}
+  ctx.stroke();
+  if(fIdx<n){
+    ctx.setLineDash([6,4]);ctx.beginPath();
+    for(var i=Math.max(0,fIdx-1);i<n;i++){var x=pl+(i/Math.max(n-1,1))*cw,y=pt+ch-((temps[i]-minT)/(maxT-minT||1))*ch;if(i===Math.max(0,fIdx-1))ctx.moveTo(x,y);else ctx.lineTo(x,y);}
+    ctx.stroke();ctx.setLineDash([]);
+  }
   ctx.fillStyle='#aaa';ctx.textAlign='center';ctx.font='9px system-ui';ctx.setLineDash([]);
   for(var i=0;i<n;i++)if(i%skip===0||i===n-1)ctx.fillText(weather[i].date.slice(0,10).slice(5),pl+(i/Math.max(n-1,1))*cw,H-8);
 }
-
 function sizeCanvas(id,drawFn,H){
   var c=document.getElementById(id);if(!c)return;
   var W=c.parentElement.offsetWidth||560;
@@ -559,11 +596,11 @@ function renderMain(){
     expandChart(function(c,W,H){drawParasiteOnCanvas(c,sp,f.end,r.forecastStart,W,H);},f.name+' — L3 Larval Density');
   });
   document.getElementById('cWxWrap').addEventListener('click',function(){
-    expandChart(function(c,W,H){drawWeatherOnCanvas(c,r.weather,f.end,W,H);},f.name+' — Weather');
+    expandChart(function(c,W,H){drawWeatherOnCanvas(c,r.weather,f.end,r.forecastStart,W,H);},f.name+' — Weather');
   });
   setTimeout(function(){
     sizeCanvas('cMain',function(c,W,H){drawParasiteOnCanvas(c,sp,f.end,r.forecastStart,W,H);},240);
-    sizeCanvas('cWeather',function(c,W,H){drawWeatherOnCanvas(c,r.weather,f.end,W,H);},200);
+    sizeCanvas('cWeather',function(c,W,H){drawWeatherOnCanvas(c,r.weather,f.end,r.forecastStart,W,H);},200);
   },100);
 }
 

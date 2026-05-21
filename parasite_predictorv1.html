@@ -183,7 +183,7 @@ function runGloWorm(days,grazingEnd,fec,ewes,lambs,ha,sp){
     L   =Math.max(0,L+dL);
     L3f =Math.max(0,L3f+dL3f);
     L3p =Math.max(0,L3p+dL3p);
-    var L3h=L3p*m2; // L3 on herbage = proportion of total pasture L3
+    var L3h=L3p*m2;
     out.push({date:dDate,larval:L3p,larvalH:L3h});
   }
   var peak=out.length?Math.max.apply(null,out.map(function(x){return x.larval;})):0;
@@ -194,7 +194,6 @@ function runGloWorm(days,grazingEnd,fec,ewes,lambs,ha,sp){
 
 // ── Weather ───────────────────────────────────────────────────────────────────
 async function getWeather(start){
-  // Historical: Meteostat station 03882
   var histUrl='https://meteostat.p.rapidapi.com/stations/daily?station=03882&start='+start+'&end='+TODAY;
   var histResp;
   try{histResp=await fetch(histUrl,{headers:{'x-rapidapi-host':'meteostat.p.rapidapi.com','x-rapidapi-key':METEOSTAT_KEY}});}
@@ -208,12 +207,12 @@ async function getWeather(start){
   });
 
   // Forecast: Open-Meteo (free, no key, 16-day forecast)
-  var forecastEnd=new Date(TODAY);
-  forecastEnd.setDate(forecastEnd.getDate()+14);
-  var forecastEndStr=forecastEnd.toISOString().slice(0,10);
-  var forecastStart=new Date(TODAY);
-  forecastStart.setDate(forecastStart.getDate()+1);
-  var forecastStartStr=forecastStart.toISOString().slice(0,10);
+  var forecastEndDate=new Date(TODAY);
+  forecastEndDate.setDate(forecastEndDate.getDate()+14);
+  var forecastEndStr=forecastEndDate.toISOString().slice(0,10);
+  var forecastStartDate=new Date(TODAY);
+  forecastStartDate.setDate(forecastStartDate.getDate()+1);
+  var forecastStartStr=forecastStartDate.toISOString().slice(0,10);
 
   var forecast=[];
   var forecastError=null;
@@ -245,7 +244,7 @@ async function getWeather(start){
     forecastError='Open-Meteo fetch failed: '+e.message;
   }
 
-  return {historical:historical, forecast:forecast, forecastStartStr:forecastStartStr||null, forecastError:forecastError};
+  return {historical:historical,forecast:forecast,forecastStartStr:forecastStartStr,forecastError:forecastError};
 }
 
 // ── Key prompt ────────────────────────────────────────────────────────────────
@@ -325,7 +324,15 @@ async function saveField(){
     var avgSolar =h.reduce(function(a,b){return a+(b.solar||0);},0)/h.length;
     for(var i=0;i<fields.length;i++) if(fields[i].id===id){
       fields[i].status='done';
-      fields[i].result={species:spResults,weather:allDays,avgTemp:avgTemp,totalRain:totalRain,avgSolar:avgSolar,forecastStart:forecastStart,forecastError:weather.forecastError};
+      fields[i].result={
+        species:spResults,
+        weather:allDays,
+        avgTemp:avgTemp,
+        totalRain:totalRain,
+        avgSolar:avgSolar,
+        forecastStart:weather.forecastStartStr,  // ← fixed: use the string from the returned object
+        forecastError:weather.forecastError
+      };
       break;
     }
     saveFields();
@@ -371,29 +378,23 @@ function drawParasiteOnCanvas(canvas,spResults,grazingEnd,forecastStart,W,H){
   ctx.strokeStyle='#ccc';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(pl,pt);ctx.lineTo(pl,pt+ch);ctx.lineTo(pl+cw,pt+ch);ctx.stroke();
   function dateX(ds){for(var i=0;i<days0.length;i++)if(days0[i].date.slice(0,10)>=ds)return pl+(i/Math.max(n-1,1))*cw;return pl+cw;}
 
-  // Grazing end marker
   var gx=dateX(grazingEnd);
   ctx.strokeStyle='#ccc';ctx.lineWidth=1;ctx.setLineDash([3,3]);ctx.beginPath();ctx.moveTo(gx,pt);ctx.lineTo(gx,pt+ch);ctx.stroke();
   ctx.setLineDash([]);ctx.fillStyle='#aaa';ctx.textAlign='left';ctx.font='9px system-ui';ctx.fillText('Grazing end',gx+3,pt+10);
 
-  // Today / forecast start marker
-  var fx=dateX(forecastStart);
-  ctx.strokeStyle='#555';ctx.lineWidth=1.5;ctx.setLineDash([4,3]);ctx.beginPath();ctx.moveTo(fx,pt);ctx.lineTo(fx,pt+ch);ctx.stroke();
-  ctx.setLineDash([]);ctx.fillStyle='#555';ctx.textAlign='left';ctx.font='9px system-ui';ctx.fillText('Today',fx+3,pt+22);
+  if(forecastStart){
+    var fx=dateX(forecastStart);
+    ctx.strokeStyle='#555';ctx.lineWidth=1.5;ctx.setLineDash([4,3]);ctx.beginPath();ctx.moveTo(fx,pt);ctx.lineTo(fx,pt+ch);ctx.stroke();
+    ctx.setLineDash([]);ctx.fillStyle='#555';ctx.textAlign='left';ctx.font='9px system-ui';ctx.fillText('Today',fx+3,pt+22);
+    ctx.fillStyle='rgba(0,0,0,0.03)';ctx.fillRect(fx,pt,pl+cw-fx,ch);
+  }
 
-  // Shaded forecast region
-  ctx.fillStyle='rgba(0,0,0,0.03)';
-  ctx.fillRect(fx,pt,pl+cw-fx,ch);
-
-  // Draw species lines — solid total L3p, dashed L3 on herbage
   SPECIES.forEach(function(sp){
     var spDays=spResults[sp.key].days;
     var fIdx=spDays.length;
     if(forecastStart){
       for(var i=0;i<spDays.length;i++){if(spDays[i].date.slice(0,10)>=forecastStart){fIdx=i;break;}}
     }
-
-    // Total L3p — solid historical, dashed forecast
     ctx.strokeStyle=sp.color;ctx.lineWidth=2;ctx.lineJoin='round';ctx.setLineDash([]);ctx.beginPath();
     for(var i=0;i<Math.min(fIdx+1,spDays.length);i++){
       var px=pl+(i/Math.max(n-1,1))*cw,py=pt+ch-(spDays[i].larval/mx)*ch;
@@ -408,8 +409,6 @@ function drawParasiteOnCanvas(canvas,spResults,grazingEnd,forecastStart,W,H){
       }
       ctx.stroke();ctx.setLineDash([]);
     }
-
-    // L3 on herbage — thinner line, same colour, more transparent
     ctx.strokeStyle=sp.color;ctx.lineWidth=1;ctx.globalAlpha=0.5;ctx.setLineDash([2,2]);ctx.beginPath();
     for(var i=0;i<Math.min(fIdx+1,spDays.length);i++){
       var px=pl+(i/Math.max(n-1,1))*cw,py=pt+ch-(spDays[i].larvalH/mx)*ch;
@@ -418,7 +417,6 @@ function drawParasiteOnCanvas(canvas,spResults,grazingEnd,forecastStart,W,H){
     ctx.stroke();ctx.globalAlpha=1.0;ctx.setLineDash([]);
   });
 
-  // X axis labels
   ctx.fillStyle='#aaa';ctx.textAlign='center';ctx.font='10px system-ui';ctx.setLineDash([]);
   var skip=Math.max(1,Math.floor(n/8));
   for(var i=0;i<n;i++)if(i%skip===0||i===n-1)ctx.fillText(days0[i].date.slice(0,10).slice(5),pl+(i/Math.max(n-1,1))*cw,H-8);
@@ -446,29 +444,22 @@ function drawWeatherOnCanvas(canvas,weather,grazingEnd,forecastStart,W,H){
   });
   ctx.strokeStyle='#ccc';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(pl,pt);ctx.lineTo(pl,pt+ch);ctx.lineTo(pl+cw,pt+ch);ctx.stroke();
   function dateX(ds){for(var i=0;i<weather.length;i++)if(weather[i].date.slice(0,10)>=ds)return pl+(i/Math.max(n-1,1))*cw;return pl+cw;}
+
   var gx=dateX(grazingEnd);
   ctx.strokeStyle='#ccc';ctx.lineWidth=1;ctx.setLineDash([3,3]);ctx.beginPath();ctx.moveTo(gx,pt);ctx.lineTo(gx,pt+ch);ctx.stroke();
   ctx.setLineDash([]);ctx.fillStyle='#aaa';ctx.textAlign='left';ctx.font='9px system-ui';ctx.fillText('Grazing end',gx+3,pt+10);
-  ctx.strokeStyle='#888';ctx.lineWidth=1;ctx.setLineDash([4,3]);ctx.beginPath();ctx.moveTo(pl+cw,pt);ctx.lineTo(pl+cw,pt+ch);ctx.stroke();
-  ctx.setLineDash([]);ctx.fillStyle='#555';ctx.textAlign='right';ctx.fillText('Today',pl+cw-3,pt+10);
-  // Shaded forecast region
+
+  var fIdx=weather.length;
   if(forecastStart){
+    for(var i=0;i<weather.length;i++){if(weather[i].date.slice(0,10)>=forecastStart){fIdx=i;break;}}
     var fx=dateX(forecastStart);
-    ctx.fillStyle='rgba(0,0,0,0.03)';
-    ctx.fillRect(fx,pt,pl+cw-fx,ch);
+    ctx.fillStyle='rgba(0,0,0,0.03)';ctx.fillRect(fx,pt,pl+cw-fx,ch);
     ctx.strokeStyle='#555';ctx.lineWidth=1.5;ctx.setLineDash([4,3]);
     ctx.beginPath();ctx.moveTo(fx,pt);ctx.lineTo(fx,pt+ch);ctx.stroke();
     ctx.setLineDash([]);ctx.fillStyle='#555';ctx.textAlign='left';ctx.font='9px system-ui';
     ctx.fillText('Today',fx+3,pt+10);
   }
 
-  // Find forecast index
-  var fIdx=weather.length;
-  if(forecastStart){
-    for(var i=0;i<weather.length;i++){if(weather[i].date.slice(0,10)>=forecastStart){fIdx=i;break;}}
-  }
-
-  // Rainfall bars — solid historical, lighter forecast
   var bw=Math.max(1,cw/n-1);
   rains.forEach(function(r,i){
     var x=pl+(i/Math.max(n-1,1))*cw-bw/2,bh=(r/maxR)*ch*0.6;
@@ -476,7 +467,6 @@ function drawWeatherOnCanvas(canvas,weather,grazingEnd,forecastStart,W,H){
     ctx.fillRect(x,pt+ch-bh,bw,bh);
   });
 
-  // Sun hours — solid historical, dashed forecast
   ctx.strokeStyle='#f39c12';ctx.lineWidth=1.5;ctx.lineJoin='round';ctx.setLineDash([]);ctx.beginPath();
   for(var i=0;i<Math.min(fIdx+1,n);i++){var x=pl+(i/Math.max(n-1,1))*cw,y=pt+ch-(sunHrs[i]/maxSun)*ch;if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);}
   ctx.stroke();
@@ -486,7 +476,6 @@ function drawWeatherOnCanvas(canvas,weather,grazingEnd,forecastStart,W,H){
     ctx.stroke();ctx.setLineDash([]);
   }
 
-  // Temperature — solid historical, dashed forecast
   ctx.strokeStyle='#e74c3c';ctx.lineWidth=2;ctx.lineJoin='round';ctx.setLineDash([]);ctx.beginPath();
   for(var i=0;i<Math.min(fIdx+1,n);i++){var x=pl+(i/Math.max(n-1,1))*cw,y=pt+ch-((temps[i]-minT)/(maxT-minT||1))*ch;if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);}
   ctx.stroke();
@@ -498,6 +487,7 @@ function drawWeatherOnCanvas(canvas,weather,grazingEnd,forecastStart,W,H){
   ctx.fillStyle='#aaa';ctx.textAlign='center';ctx.font='9px system-ui';ctx.setLineDash([]);
   for(var i=0;i<n;i++)if(i%skip===0||i===n-1)ctx.fillText(weather[i].date.slice(0,10).slice(5),pl+(i/Math.max(n-1,1))*cw,H-8);
 }
+
 function sizeCanvas(id,drawFn,H){
   var c=document.getElementById(id);if(!c)return;
   var W=c.parentElement.offsetWidth||560;
@@ -549,7 +539,8 @@ function renderMain(){
     return '<div class="rcard" style="background:'+RB[rl]+';border-color:'+RBD[rl]+'">'
       +'<div class="spname" style="color:'+RT[rl]+'"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:'+s.color+';margin-right:5px;vertical-align:middle"></span>'+s.name+'</div>'
       +'<div class="rl" style="color:'+RC[rl]+'">'+rl+'</div>'
-      +'<div class="idx" style="color:'+RT[rl]+'">L3 herbage today: '+Math.round(sr.currentH).toLocaleString()+' /ha</div>'      +'<div class="rb"><div class="rbf" style="width:'+pct+'%;background:'+RC[rl]+'"></div></div>'
+      +'<div class="idx" style="color:'+RT[rl]+'">L3 herbage today: '+Math.round(sr.currentH).toLocaleString()+' /ha</div>'
+      +'<div class="rb"><div class="rbf" style="width:'+pct+'%;background:'+RC[rl]+'"></div></div>'
       +'<div class="rec" style="color:'+RT[rl]+'">'+RECS[rl]+'</div></div>';
   }).join('');
   var leg=SPECIES.map(function(s){return '<span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:#6c757d;margin-right:14px"><span style="display:inline-block;width:22px;height:3px;border-radius:2px;background:'+s.color+'"></span>'+s.name+'</span>';}).join('');

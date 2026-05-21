@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -217,6 +216,7 @@ async function getWeather(start){
   var forecastStartStr=forecastStart.toISOString().slice(0,10);
 
   var forecast=[];
+  var forecastError=null;
   try{
     var fcastUrl='https://api.open-meteo.com/v1/forecast?latitude='+LAT+'&longitude='+LON
       +'&daily=temperature_2m_mean,precipitation_sum,sunshine_duration'
@@ -235,13 +235,17 @@ async function getWeather(start){
             forecast:true
           };
         });
+      } else {
+        forecastError='Open-Meteo returned empty forecast data';
       }
+    } else {
+      forecastError='Open-Meteo HTTP '+fcastResp.status;
     }
   }catch(e){
-    console.warn('Forecast fetch failed:',e.message);
+    forecastError='Open-Meteo fetch failed: '+e.message;
   }
 
-  return {historical:historical, forecast:forecast, forecastStartStr:forecastStartStr||null};
+  return {historical:historical, forecast:forecast, forecastStartStr:forecastStartStr||null, forecastError:forecastError};
 }
 
 // ── Key prompt ────────────────────────────────────────────────────────────────
@@ -321,7 +325,7 @@ async function saveField(){
     var avgSolar =h.reduce(function(a,b){return a+(b.solar||0);},0)/h.length;
     for(var i=0;i<fields.length;i++) if(fields[i].id===id){
       fields[i].status='done';
-      fields[i].result={species:spResults,weather:allDays,avgTemp:avgTemp,totalRain:totalRain,avgSolar:avgSolar,forecastStart:forecastStart};
+      fields[i].result={species:spResults,weather:allDays,avgTemp:avgTemp,totalRain:totalRain,avgSolar:avgSolar,forecastStart:forecastStart,forecastError:weather.forecastError};
       break;
     }
     saveFields();
@@ -566,7 +570,9 @@ function renderMain(){
     +'<span><span style="display:inline-block;width:12px;height:10px;background:rgba(52,152,219,0.5);vertical-align:middle"></span>Rainfall (mm)</span>'
     +'<span><span style="display:inline-block;width:22px;height:3px;background:#f39c12;border-radius:2px;vertical-align:middle"></span>Sun hours</span>'
     +'</div>'
-    +'<div class="chart-wrap" id="cWxWrap" title="Click to expand"><canvas id="cWeather"></canvas></div></div>'
+    +'<div class="chart-wrap" id="cWxWrap" title="Click to expand"><canvas id="cWeather"></canvas></div>'
+    +(r.forecastError?'<div style="font-size:11px;color:#e67e22;margin-top:6px">⚠ Forecast unavailable: '+r.forecastError+'</div>':'')
+    +'</div>'
     +'<div class="stats">'
     +'<div class="stat"><div class="lbl">Avg Temp</div><div class="val">'+r.avgTemp.toFixed(1)+'<span class="unit"> °C</span></div></div>'
     +'<div class="stat"><div class="lbl">Total Rainfall</div><div class="val">'+Math.round(r.totalRain)+'<span class="unit"> mm</span></div></div>'

@@ -364,7 +364,8 @@ function selField(id){selId=id;renderSidebar();renderMain();}
 function drawParasiteOnCanvas(canvas,spResults,grazingEnd,forecastStart,W,H){
   var ctx=canvas.getContext('2d');ctx.clearRect(0,0,W,H);
   var pl=72,pr=16,pt=18,pb=34,cw=W-pl-pr,ch=H-pt-pb;
-  var allVals=[];SPECIES.forEach(function(sp){spResults[sp.key].days.forEach(function(d){allVals.push(d.larval);});});
+  // Scale to herbage (L3h) values only — that's what we plot as primary
+  var allVals=[];SPECIES.forEach(function(sp){spResults[sp.key].days.forEach(function(d){allVals.push(d.larvalH);});});
   var mx=Math.max.apply(null,allVals)||1;
   var days0=spResults['hc'].days,n=days0.length;if(!n)return;
   ctx.save();ctx.font='10px system-ui';ctx.fillStyle='#999';ctx.textAlign='center';
@@ -395,23 +396,25 @@ function drawParasiteOnCanvas(canvas,spResults,grazingEnd,forecastStart,W,H){
     if(forecastStart){
       for(var i=0;i<spDays.length;i++){if(spDays[i].date.slice(0,10)>=forecastStart){fIdx=i;break;}}
     }
+    // Primary line: L3 on herbage (larvalH) — solid historical, dashed forecast
     ctx.strokeStyle=sp.color;ctx.lineWidth=2;ctx.lineJoin='round';ctx.setLineDash([]);ctx.beginPath();
     for(var i=0;i<Math.min(fIdx+1,spDays.length);i++){
-      var px=pl+(i/Math.max(n-1,1))*cw,py=pt+ch-(spDays[i].larval/mx)*ch;
+      var px=pl+(i/Math.max(n-1,1))*cw,py=pt+ch-(spDays[i].larvalH/mx)*ch;
       if(i===0)ctx.moveTo(px,py);else ctx.lineTo(px,py);
     }
     ctx.stroke();
     if(fIdx<spDays.length){
       ctx.strokeStyle=sp.color;ctx.lineWidth=2;ctx.setLineDash([6,4]);ctx.beginPath();
       for(var i=Math.max(0,fIdx-1);i<spDays.length;i++){
-        var px=pl+(i/Math.max(n-1,1))*cw,py=pt+ch-(spDays[i].larval/mx)*ch;
+        var px=pl+(i/Math.max(n-1,1))*cw,py=pt+ch-(spDays[i].larvalH/mx)*ch;
         if(i===Math.max(0,fIdx-1))ctx.moveTo(px,py);else ctx.lineTo(px,py);
       }
       ctx.stroke();ctx.setLineDash([]);
     }
-    ctx.strokeStyle=sp.color;ctx.lineWidth=1;ctx.globalAlpha=0.5;ctx.setLineDash([2,2]);ctx.beginPath();
+    // Secondary line: total pasture L3p — thinner, more transparent
+    ctx.strokeStyle=sp.color;ctx.lineWidth=1;ctx.globalAlpha=0.35;ctx.setLineDash([2,3]);ctx.beginPath();
     for(var i=0;i<Math.min(fIdx+1,spDays.length);i++){
-      var px=pl+(i/Math.max(n-1,1))*cw,py=pt+ch-(spDays[i].larvalH/mx)*ch;
+      var px=pl+(i/Math.max(n-1,1))*cw,py=pt+ch-(spDays[i].larval/mx)*ch;
       if(i===0)ctx.moveTo(px,py);else ctx.lineTo(px,py);
     }
     ctx.stroke();ctx.globalAlpha=1.0;ctx.setLineDash([]);
@@ -552,8 +555,19 @@ function renderMain(){
     +'<button id="btnDel" class="btn-red btn-sm">Delete</button>'
     +'</div></div>'
     +'<div class="cards3">'+cards+'</div>'
-    +'<div class="card"><h3>L3 Larval Density — '+f.start+' to Today ('+TODAY+')</h3>'
-    +'<div style="margin-bottom:10px">'+leg+'<span style="font-size:11px;color:#aaa;margin-left:8px">— — 14-day forecast</span></div>'
+    +'<div class="card"><h3>L3 Larval Density on Herbage — '+f.start+' to +14 days</h3>'
+    +'<div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:10px;font-size:11px;color:#6c757d;align-items:center">'
+    +SPECIES.map(function(s){return ''
+      +'<span style="display:inline-flex;align-items:center;gap:5px">'
+      +'<span style="display:inline-block;width:22px;height:3px;border-radius:2px;background:'+s.color+'"></span>'
+      +s.name+' (herbage)</span>';}).join('')
+    +'<span style="display:inline-flex;align-items:center;gap:5px">'
+    +'<span style="display:inline-block;width:22px;height:2px;background:#aaa;opacity:0.5;border-top:2px dotted #aaa"></span>'
+    +'total pasture L3</span>'
+    +'<span style="display:inline-flex;align-items:center;gap:5px">'
+    +'<span style="display:inline-block;width:22px;height:2px;border-top:2px dashed #555"></span>'
+    +'forecast</span>'
+    +'</div>'
     +'<div class="chart-wrap" id="cParWrap" title="Click to expand"><canvas id="cMain"></canvas></div></div>'
     +'<div class="card"><h3>Weather — '+f.start+' to Today · Herstmonceux station (03882)</h3>'
     +'<div class="wleg">'

@@ -364,8 +364,8 @@ function selField(id){selId=id;renderSidebar();renderMain();}
 function drawParasiteOnCanvas(canvas,spResults,grazingEnd,forecastStart,W,H){
   var ctx=canvas.getContext('2d');ctx.clearRect(0,0,W,H);
   var pl=72,pr=16,pt=18,pb=34,cw=W-pl-pr,ch=H-pt-pb;
-  // Scale to herbage (L3h) values only — that's what we plot as primary
-  var allVals=[];SPECIES.forEach(function(sp){spResults[sp.key].days.forEach(function(d){allVals.push(d.larvalH);});});
+  // Scale to max of both larvalH and larval so neither line goes off canvas
+  var allVals=[];SPECIES.forEach(function(sp){spResults[sp.key].days.forEach(function(d){allVals.push(d.larvalH,d.larval);});});
   var mx=Math.max.apply(null,allVals)||1;
   var days0=spResults['hc'].days,n=days0.length;if(!n)return;
   ctx.save();ctx.font='10px system-ui';ctx.fillStyle='#999';ctx.textAlign='center';

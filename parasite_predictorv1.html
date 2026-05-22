@@ -316,6 +316,18 @@ async function saveField(){
   try{
     var weather=await getWeather(start);
     var allDays=weather.historical.concat(weather.forecast);
+    // Fill any gap between end of historical and start of forecast
+    if(weather.historical.length && weather.forecast.length){
+      var lastHist=new Date(weather.historical[weather.historical.length-1].date);
+      var firstFcast=new Date(weather.forecast[0].date);
+      var gap=[];
+      var d=new Date(lastHist);d.setDate(d.getDate()+1);
+      while(d<firstFcast){
+        gap.push({date:d.toISOString().slice(0,10),temp:10,rain:0,solar:10,forecast:false});
+        d.setDate(d.getDate()+1);
+      }
+      allDays=weather.historical.concat(gap,weather.forecast);
+    }
     var spResults={};
     SPECIES.forEach(function(sp){spResults[sp.key]=runGloWorm(allDays,end,fec,ewes,lambs,ha,sp);});
     var h=weather.historical;

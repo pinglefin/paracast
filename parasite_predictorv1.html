@@ -364,10 +364,13 @@ function selField(id){selId=id;renderSidebar();renderMain();}
 function drawParasiteOnCanvas(canvas,spResults,grazingEnd,forecastStart,W,H){
   var ctx=canvas.getContext('2d');ctx.clearRect(0,0,W,H);
   var pl=72,pr=16,pt=18,pb=34,cw=W-pl-pr,ch=H-pt-pb;
-  // Scale to max of both larvalH and larval — use reduce to avoid apply() stack limits
   var mx=0;SPECIES.forEach(function(sp){spResults[sp.key].days.forEach(function(d){if(d.larvalH>mx)mx=d.larvalH;if(d.larval>mx)mx=d.larval;});});
   if(!mx)mx=1;
-  var days0=spResults['hc'].days,n=days0.length;if(!n)return;
+  // Use the longest species day array as the x-axis reference
+  var days0=SPECIES.reduce(function(best,sp){
+    var d=spResults[sp.key].days;return d.length>best.length?d:best;
+  },[]);
+  var n=days0.length;if(!n)return;
   ctx.save();ctx.font='10px system-ui';ctx.fillStyle='#999';ctx.textAlign='center';
   ctx.translate(11,pt+ch/2);ctx.rotate(-Math.PI/2);ctx.fillText('L3 larvae / ha',0,0);ctx.restore();
   ctx.font='10px system-ui';ctx.textAlign='right';
@@ -392,28 +395,29 @@ function drawParasiteOnCanvas(canvas,spResults,grazingEnd,forecastStart,W,H){
 
   SPECIES.forEach(function(sp){
     var spDays=spResults[sp.key].days;
-    var fIdx=spDays.length;
+    var spN=spDays.length;
+    var fIdx=spN;
     if(forecastStart){
-      for(var i=0;i<spDays.length;i++){if(spDays[i].date.slice(0,10)>=forecastStart){fIdx=i;break;}}
+      for(var i=0;i<spN;i++){if(spDays[i].date.slice(0,10)>=forecastStart){fIdx=i;break;}}
     }
-    // Primary line: L3 on herbage (larvalH) — solid historical, dashed forecast
+    // Primary: L3h on herbage — solid historical, dashed forecast
     ctx.strokeStyle=sp.color;ctx.lineWidth=2;ctx.lineJoin='round';ctx.setLineDash([]);ctx.beginPath();
-    for(var i=0;i<Math.min(fIdx+1,spDays.length);i++){
+    for(var i=0;i<Math.min(fIdx+1,spN);i++){
       var px=pl+(i/Math.max(n-1,1))*cw,py=pt+ch-(spDays[i].larvalH/mx)*ch;
       if(i===0)ctx.moveTo(px,py);else ctx.lineTo(px,py);
     }
     ctx.stroke();
-    if(fIdx<spDays.length){
+    if(fIdx<spN){
       ctx.strokeStyle=sp.color;ctx.lineWidth=2;ctx.setLineDash([6,4]);ctx.beginPath();
-      for(var i=Math.max(0,fIdx-1);i<spDays.length;i++){
+      for(var i=Math.max(0,fIdx-1);i<spN;i++){
         var px=pl+(i/Math.max(n-1,1))*cw,py=pt+ch-(spDays[i].larvalH/mx)*ch;
         if(i===Math.max(0,fIdx-1))ctx.moveTo(px,py);else ctx.lineTo(px,py);
       }
       ctx.stroke();ctx.setLineDash([]);
     }
-    // Secondary line: total pasture L3p — thinner, more transparent
-    ctx.strokeStyle=sp.color;ctx.lineWidth=1;ctx.globalAlpha=0.35;ctx.setLineDash([2,3]);ctx.beginPath();
-    for(var i=0;i<Math.min(fIdx+1,spDays.length);i++){
+    // Secondary: total L3p — faint dotted across full range
+    ctx.strokeStyle=sp.color;ctx.lineWidth=1;ctx.globalAlpha=0.3;ctx.setLineDash([2,3]);ctx.beginPath();
+    for(var i=0;i<spN;i++){
       var px=pl+(i/Math.max(n-1,1))*cw,py=pt+ch-(spDays[i].larval/mx)*ch;
       if(i===0)ctx.moveTo(px,py);else ctx.lineTo(px,py);
     }
@@ -542,7 +546,7 @@ function renderMain(){
     return '<div class="rcard" style="background:'+RB[rl]+';border-color:'+RBD[rl]+'">'
       +'<div class="spname" style="color:'+RT[rl]+'"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:'+s.color+';margin-right:5px;vertical-align:middle"></span>'+s.name+'</div>'
       +'<div class="rl" style="color:'+RC[rl]+'">'+rl+'</div>'
-      +'<div class="idx" style="color:'+RT[rl]+'">L3 herbage today: '+Math.round(sr.currentH).toLocaleString()+' /ha</div>'
+      +'<div class="idx" style="color:'+RT[rl]+'">L3h on herbage today: '+Math.round(sr.currentH).toLocaleString()+' /ha</div>'
       +'<div class="rb"><div class="rbf" style="width:'+pct+'%;background:'+RC[rl]+'"></div></div>'
       +'<div class="rec" style="color:'+RT[rl]+'">'+RECS[rl]+'</div></div>';
   }).join('');
@@ -555,18 +559,17 @@ function renderMain(){
     +'<button id="btnDel" class="btn-red btn-sm">Delete</button>'
     +'</div></div>'
     +'<div class="cards3">'+cards+'</div>'
-    +'<div class="card"><h3>L3 Larval Density on Herbage — '+f.start+' to +14 days</h3>'
+    +'<div class="card"><h3>L3 on Herbage — '+f.start+' to +14 days</h3>'
     +'<div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:10px;font-size:11px;color:#6c757d;align-items:center">'
-    +SPECIES.map(function(s){return ''
-      +'<span style="display:inline-flex;align-items:center;gap:5px">'
+    +SPECIES.map(function(s){return '<span style="display:inline-flex;align-items:center;gap:5px">'
       +'<span style="display:inline-block;width:22px;height:3px;border-radius:2px;background:'+s.color+'"></span>'
-      +s.name+' (herbage)</span>';}).join('')
+      +s.name+' (herbage L3h)</span>';}).join('')
+    +SPECIES.map(function(s){return '<span style="display:inline-flex;align-items:center;gap:5px">'
+      +'<span style="display:inline-block;width:22px;border-top:2px dotted '+s.color+';opacity:0.5"></span>'
+      +s.name+' (total L3p)</span>';}).join('')
     +'<span style="display:inline-flex;align-items:center;gap:5px">'
-    +'<span style="display:inline-block;width:22px;height:2px;background:#aaa;opacity:0.5;border-top:2px dotted #aaa"></span>'
-    +'total pasture L3</span>'
-    +'<span style="display:inline-flex;align-items:center;gap:5px">'
-    +'<span style="display:inline-block;width:22px;height:2px;border-top:2px dashed #555"></span>'
-    +'forecast</span>'
+    +'<span style="display:inline-block;width:22px;border-top:2px dashed #888"></span>'
+    +'14-day forecast</span>'
     +'</div>'
     +'<div class="chart-wrap" id="cParWrap" title="Click to expand"><canvas id="cMain"></canvas></div></div>'
     +'<div class="card"><h3>Weather — '+f.start+' to Today · Herstmonceux station (03882)</h3>'

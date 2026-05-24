@@ -147,10 +147,11 @@ input:focus,select:focus{border-color:#1a6b3c}
 (function(){
 
 var LAT=51.012511,LON=0.689743;
+var HARDCODED_KEY='f8e775420bmsh90cb930357b69c9p134236jsn4ccbf97bd995';
 var TODAY=new Date().toISOString().slice(0,10);
 var fields=[],mobs=[];
 var selId=null,editingFieldId=null,editingMobId=null;
-var METEOSTAT_KEY=null;
+var METEOSTAT_KEY=HARDCODED_KEY;
 var activeTab='fields';
 
 // ── Storage ───────────────────────────────────────────────────────────────────
@@ -347,10 +348,10 @@ async function saveField(){
         break;
       }
     }
-    await persist();
+    persist();
   }catch(e){
     for(var i=0;i<fields.length;i++){if(fields[i].id===id){fields[i].status='error';fields[i].error=e.message;break;}}
-    await persist();
+    persist();
   }
   renderSidebar();if(selId===id)renderMain();
 }
@@ -663,7 +664,7 @@ function renderFields(el){
   document.getElementById('btnDel').addEventListener('click',async function(){
     if(!confirm('Delete this field?'))return;
     fields=fields.filter(function(x){return x.id!==selId;});
-    await persist();selId=null;renderSidebar();renderMain();
+    persist();selId=null;renderSidebar();renderMain();
   });
   document.getElementById('cParWrap').addEventListener('click',function(){expandChart(function(c,W,H){drawParasiteOnCanvas(c,sp,f.end,r.forecastStart,W,H);},f.name+' — L3 Larval Density');});
   document.getElementById('cWxWrap').addEventListener('click',function(){expandChart(function(c,W,H){drawWeatherOnCanvas(c,r.weather,f.end,r.forecastStart,W,H);},f.name+' — Weather');});
@@ -693,7 +694,7 @@ function renderMobs(el){
     if(fields.some(function(f){return f.mobId===id;})){alert('This mob is assigned to one or more fields. Reassign or delete those fields first.');return;}
     if(!confirm('Delete this mob?'))return;
     mobs=mobs.filter(function(m){return m.id!==id;});
-    await persist();renderMain();
+    persist();renderMain();
   });});
 }
 
@@ -711,8 +712,15 @@ function renderSettings(el){
   document.getElementById('btnSaveKey').addEventListener('click',async function(){
     var k=document.getElementById('sKey').value.trim();
     if(!k){document.getElementById('keyMsg').style.color='#721c24';document.getElementById('keyMsg').textContent='Please enter a key.';return;}
-    METEOSTAT_KEY=k;await saveKey(k);
-    document.getElementById('keyMsg').style.color='#1a6b3c';document.getElementById('keyMsg').textContent='Key saved.';
+    METEOSTAT_KEY=k;
+    try{
+      localStorage.setItem('paracast_data',JSON.stringify({fields:fields,mobs:mobs,key:METEOSTAT_KEY}));
+      document.getElementById('keyMsg').style.color='#1a6b3c';
+      document.getElementById('keyMsg').textContent='Key saved ✓';
+    }catch(e){
+      document.getElementById('keyMsg').style.color='#721c24';
+      document.getElementById('keyMsg').textContent='Save failed: '+e.message;
+    }
   });
 }
 
@@ -722,6 +730,7 @@ function renderSettings(el){
   renderSidebar();
   renderMain();
 })();
+
 
 })();
 </script>

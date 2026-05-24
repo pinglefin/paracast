@@ -22,11 +22,8 @@ header p{font-size:12px;opacity:.7}
 .fi h3{font-size:13px;font-weight:600;margin-bottom:2px}
 .fi p{font-size:11px;color:#6c757d}
 .badge{display:inline-block;font-size:10px;font-weight:600;padding:2px 7px;border-radius:20px}
-.low{background:#d4edda;color:#155724}
-.moderate{background:#fff3cd;color:#856404}
-.high{background:#ffe0b2;color:#bf360c}
-.veryhigh{background:#f8d7da;color:#721c24}
 .pending{background:#e9ecef;color:#6c757d}
+.veryhigh{background:#f8d7da;color:#721c24}
 .sidebar-footer{padding:12px;border-top:1px solid #dee2e6;display:flex;flex-direction:column;gap:6px}
 .main{flex:1;overflow-y:auto;padding:20px 24px}
 .center{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:#6c757d;text-align:center}
@@ -46,14 +43,9 @@ input{padding:8px 10px;border:1px solid #dee2e6;border-radius:6px;font-size:13px
 input:focus{border-color:#1a6b3c}
 .modal-footer{display:flex;gap:8px;justify-content:flex-end;margin-top:20px}
 .err{background:#f8d7da;color:#721c24;padding:10px 12px;border-radius:6px;font-size:13px;margin-bottom:12px}
-.cards3{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-bottom:20px}
-.rcard{border-radius:10px;padding:14px;border:1px solid}
-.rcard .spname{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;opacity:.75;margin-bottom:4px}
-.rcard .rl{font-size:22px;font-weight:700;margin-bottom:2px}
-.rcard .idx{font-size:11px;margin-bottom:6px}
-.rcard .rb{height:5px;border-radius:3px;margin-bottom:8px;overflow:hidden;background:rgba(0,0,0,.1)}
-.rcard .rbf{height:100%;border-radius:3px}
-.rcard .rec{font-size:11px;line-height:1.5}
+.cards2{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-bottom:20px}
+.rcard{border-radius:10px;padding:14px;border:1px solid #dee2e6;background:#f8f9fa}
+.rcard .spname{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:#6c757d;margin-bottom:8px}
 .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
 .stat{background:#fff;border:1px solid #dee2e6;border-radius:8px;padding:12px}
 .stat .lbl{font-size:11px;color:#6c757d;margin-bottom:3px}
@@ -61,7 +53,7 @@ input:focus{border-color:#1a6b3c}
 .stat .unit{font-size:11px;color:#6c757d;font-weight:400}
 .card{background:#fff;border:1px solid #dee2e6;border-radius:8px;padding:16px;margin-bottom:14px}
 .card h3{font-size:13px;font-weight:600;margin-bottom:8px}
-.chart-wrap{width:100%;overflow:hidden;cursor:zoom-in}
+.chart-wrap{width:100%;overflow:hidden;cursor:crosshair;position:relative}
 .spinner{width:36px;height:36px;border:3px solid #dee2e6;border-top-color:#1a6b3c;border-radius:50%;animation:spin .8s linear infinite;margin-bottom:14px}
 @keyframes spin{to{transform:rotate(360deg)}}
 .dh{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px}
@@ -70,13 +62,14 @@ input:focus{border-color:#1a6b3c}
 .chart-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;display:flex;align-items:center;justify-content:center}
 .chart-overlay-inner{background:#fff;border-radius:12px;padding:24px;width:90vw;max-width:1000px}
 .wleg{display:flex;gap:14px;margin-bottom:8px;flex-wrap:wrap;font-size:11px;color:#6c757d}
-.wleg span{display:inline-flex;align-items:center;gap:4px}
 .key-box{background:#fff;border-radius:12px;padding:32px;width:440px;max-width:95vw;box-shadow:0 8px 32px rgba(0,0,0,.12)}
 .key-box h2{font-size:16px;font-weight:600;margin-bottom:8px;color:#333}
 .key-box p{font-size:13px;color:#6c757d;margin-bottom:20px;line-height:1.6}
+.chtip{position:fixed;background:rgba(20,20,20,0.92);color:#fff;padding:8px 12px;border-radius:8px;font-size:12px;line-height:1.7;pointer-events:none;display:none;z-index:9999;white-space:nowrap;box-shadow:0 4px 12px rgba(0,0,0,0.3)}
 </style>
 </head>
 <body>
+<div class="chtip" id="chartTip"></div>
 <header>
   <h1>Paracast</h1>
   <p>Pasture Parasite Risk · GloWorm-FL Model</p>
@@ -91,7 +84,6 @@ input:focus{border-color:#1a6b3c}
   </div>
   <div class="main" id="main"></div>
 </div>
-
 <div class="overlay" id="overlay" style="display:none">
   <div class="modal">
     <h2 id="modalTitle">Add Field</h2>
@@ -112,7 +104,6 @@ input:focus{border-color:#1a6b3c}
     </div>
   </div>
 </div>
-
 <script>
 (function(){
 
@@ -124,17 +115,15 @@ var selId=null,editingId=null;
 var METEOSTAT_KEY=localStorage.getItem('paracast_key')||null;
 function saveFields(){localStorage.setItem('paracast_fields',JSON.stringify(fields));}
 
-// ── Species parameters (Rose et al. 2015 Table 2) ─────────────────────────────
 var SPECIES=[
-  {key:'hc',name:'H. contortus',   color:'#e74c3c',devA:-0.09746,devB:0.01063,mu12c:[-1.47135,-0.11444,0.00327],mu3c:[-2.63080,-0.14407,0.00463],mu4c:[-3.68423,-0.25346,0.00740],mu3fromMu4:false,peWindow:4, C:0.1,m1opt:0.25,m1sub:0.051,m1dry:0.0},
-  {key:'tc',name:'T. circumcincta',color:'#2980b9',devA:-0.02085,devB:0.00467,mu12c:[-1.62026,-0.17771,0.00629],mu4c:[-4.58817,-0.13996,0.00461],mu3fromMu4:true, peWindow:7, C:0.1,m1opt:0.21,m1sub:0.025,m1dry:0.0}
+  {key:'hc',name:'H. contortus',   color:'#e74c3c',devA:-0.09746,devB:0.01063,mu12c:[-1.47135,-0.11444,0.00327],mu3c:[-2.63080,-0.14407,0.00463],mu4c:[-3.68423,-0.25346,0.00740],mu3fromMu4:false,peWindow:4,C:0.1,m1opt:0.25,m1sub:0.051,m1dry:0.0},
+  {key:'tc',name:'T. circumcincta',color:'#2980b9',devA:-0.02085,devB:0.00467,mu12c:[-1.62026,-0.17771,0.00629],mu4c:[-4.58817,-0.13996,0.00461],mu3fromMu4:true, peWindow:7,C:0.1,m1opt:0.21,m1sub:0.025,m1dry:0.0}
 ];
 
 function polyMu(c,T){var v=c[0]+c[1]*T+c[2]*T*T+(c[3]?c[3]*T*T*T:0);return Math.min(1,Math.max(0,Math.exp(v)));}
 function calcM2(T){return Math.min(1,Math.max(0,Math.exp(-5.48240+0.45392*T-0.01252*T*T)));}
 function petMM(T){if(T<=0)return 0.1;return Math.max(0.1,0.0023*(T+17.8)*Math.sqrt(T)*0.408);}
 
-// ── GloWorm-FL ────────────────────────────────────────────────────────────────
 function runGloWorm(days,grazingEnd,fec,ewes,lambs,ha,sp){
   var dailyEggsPerHa=(fec*(ewes*200+lambs*100))/ha;
   var rainHistory=[],petHistory=[],E=0,L=0,L3f=0,L3p=0,out=[];
@@ -158,89 +147,62 @@ function runGloWorm(days,grazingEnd,fec,ewes,lambs,ha,sp){
     var C=(sp.peWindow>0&&peRatio<1)?sp.C:1.0;
     var m1=R>=2?sp.m1opt:(sp.peWindow>0&&peRatio>=1?sp.m1sub:sp.m1dry);
     var Enew=dDate<=grazingEnd?dailyEggsPerHa*C:0;
-    var dE  =-(mu1+2*delta)*E+Enew;
-    var dL  =-(mu2+2*delta)*L+2*delta*E;
+    var dE=-(mu1+2*delta)*E+Enew;
+    var dL=-(mu2+2*delta)*L+2*delta*E;
     var dL3f=-(mu3+m1)*L3f+2*delta*L;
     var dL3p=-(mu4*(1-m2)+mu5*m2)*L3p+m1*L3f;
-    E   =Math.max(0,E+dE);
-    L   =Math.max(0,L+dL);
-    L3f =Math.max(0,L3f+dL3f);
-    L3p =Math.max(0,L3p+dL3p);
+    E=Math.max(0,E+dE);L=Math.max(0,L+dL);L3f=Math.max(0,L3f+dL3f);L3p=Math.max(0,L3p+dL3p);
     var L3h=L3p*m2;
     out.push({date:dDate,larval:L3p,larvalH:L3h});
   }
-  var peak=out.length?Math.max.apply(null,out.map(function(x){return x.larval;})):0;
+  var peak=0;for(var i=0;i<out.length;i++)if(out[i].larval>peak)peak=out[i].larval;
   var current=out.length?out[out.length-1].larval:0;
   var currentH=out.length?out[out.length-1].larvalH:0;
-  // Days safe grazing: first day L3p exceeds 1% of peak, counted from grazing start
   var daysSafe=null;
-  for(var j=0;j<out.length;j++){
-    if(out[j].larval>1000){daysSafe=j;break;}
-  }
+  for(var j=0;j<out.length;j++){if(out[j].larval>1000){daysSafe=j;break;}}
   return {days:out,peak:peak,current:current,currentH:currentH,daysSafe:daysSafe};
 }
 
-// ── Weather ───────────────────────────────────────────────────────────────────
 async function getWeather(start){
   var histUrl='https://meteostat.p.rapidapi.com/stations/daily?station=03882&start='+start+'&end='+TODAY;
   var histResp;
   try{histResp=await fetch(histUrl,{headers:{'x-rapidapi-host':'meteostat.p.rapidapi.com','x-rapidapi-key':METEOSTAT_KEY}});}
   catch(e){throw new Error('Could not reach Meteostat API. ('+e.message+')');}
-  if(histResp.status===401||histResp.status===403) throw new Error('Invalid or expired Meteostat API key. Use the Change API Key button to update it.');
-  if(!histResp.ok) throw new Error('Meteostat API error (HTTP '+histResp.status+').');
+  if(histResp.status===401||histResp.status===403)throw new Error('Invalid or expired Meteostat API key.');
+  if(!histResp.ok)throw new Error('Meteostat API error (HTTP '+histResp.status+').');
   var histData=await histResp.json();
-  if(!histData.data||!histData.data.length) throw new Error('No historical weather data returned from Meteostat for '+start+' to '+TODAY+'.');
+  if(!histData.data||!histData.data.length)throw new Error('No historical weather data returned from Meteostat for '+start+' to '+TODAY+'.');
   var historical=histData.data.map(function(d){
     return {date:d.date,temp:d.tavg,rain:d.prcp||0,solar:d.tsun!=null?(d.tsun/60)*2:10,forecast:false};
   });
-
-  // Forecast: Open-Meteo (free, no key, 16-day forecast)
-  var forecastEndDate=new Date(TODAY);
-  forecastEndDate.setDate(forecastEndDate.getDate()+14);
+  var forecastEndDate=new Date(TODAY);forecastEndDate.setDate(forecastEndDate.getDate()+14);
   var forecastEndStr=forecastEndDate.toISOString().slice(0,10);
-  var forecastStartDate=new Date(TODAY);
-  forecastStartDate.setDate(forecastStartDate.getDate()+1);
+  var forecastStartDate=new Date(TODAY);forecastStartDate.setDate(forecastStartDate.getDate()+1);
   var forecastStartStr=forecastStartDate.toISOString().slice(0,10);
-
-  var forecast=[];
-  var forecastError=null;
+  var forecast=[],forecastError=null;
   try{
     var fcastUrl='https://api.open-meteo.com/v1/forecast?latitude='+LAT+'&longitude='+LON
       +'&daily=temperature_2m_mean,precipitation_sum,sunshine_duration'
-      +'&start_date='+forecastStartStr+'&end_date='+forecastEndStr
-      +'&timezone=Europe%2FLondon';
+      +'&start_date='+forecastStartStr+'&end_date='+forecastEndStr+'&timezone=Europe%2FLondon';
     var fcastResp=await fetch(fcastUrl);
     if(fcastResp.ok){
       var fcastData=await fcastResp.json();
       if(fcastData.daily&&fcastData.daily.time&&fcastData.daily.time.length){
         forecast=fcastData.daily.time.map(function(date,i){
-          return {
-            date:date,
-            temp:fcastData.daily.temperature_2m_mean[i]||10,
-            rain:fcastData.daily.precipitation_sum[i]||0,
-            solar:fcastData.daily.sunshine_duration[i]!=null?(fcastData.daily.sunshine_duration[i]/3600)*2:10,
-            forecast:true
-          };
+          return {date:date,temp:fcastData.daily.temperature_2m_mean[i]||10,rain:fcastData.daily.precipitation_sum[i]||0,
+            solar:fcastData.daily.sunshine_duration[i]!=null?(fcastData.daily.sunshine_duration[i]/3600)*2:10,forecast:true};
         });
-      } else {
-        forecastError='Open-Meteo returned empty forecast data';
-      }
-    } else {
-      forecastError='Open-Meteo HTTP '+fcastResp.status;
-    }
-  }catch(e){
-    forecastError='Open-Meteo fetch failed: '+e.message;
-  }
-
-  return {historical:historical,forecast:forecast,forecastStartStr:forecastStartStr,forecastError:forecastError};
+      } else forecastError='Open-Meteo returned empty forecast data';
+    } else forecastError='Open-Meteo HTTP '+fcastResp.status;
+  }catch(e){forecastError='Open-Meteo fetch failed: '+e.message;}
+  var actualForecastStart=forecast.length?forecast[0].date:forecastStartStr;
+  return {historical:historical,forecast:forecast,forecastStartStr:actualForecastStart,forecastError:forecastError};
 }
 
-// ── Key prompt ────────────────────────────────────────────────────────────────
 function showKeyPrompt(){
   var el=document.getElementById('main');
   el.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100%">'
-    +'<div class="key-box">'
-    +'<div style="font-size:32px;margin-bottom:12px">🔑</div>'
+    +'<div class="key-box"><div style="font-size:32px;margin-bottom:12px">🔑</div>'
     +'<h2>Meteostat API Key Required</h2>'
     +'<p>Enter your free Meteostat RapidAPI key to fetch real weather data. Get one free at <strong>rapidapi.com/meteostat</strong> (500 calls/month).</p>'
     +'<input id="keyInput" type="password" placeholder="Paste your RapidAPI key here" style="width:100%;padding:10px;border:1px solid #dee2e6;border-radius:6px;font-size:13px;margin-bottom:10px;outline:none">'
@@ -255,7 +217,6 @@ function showKeyPrompt(){
   document.getElementById('keyInput').addEventListener('keydown',function(e){if(e.key==='Enter')document.getElementById('btnSaveKey').click();});
 }
 
-// ── Modal ─────────────────────────────────────────────────────────────────────
 document.getElementById('btnAdd').addEventListener('click',function(){
   if(!METEOSTAT_KEY){showKeyPrompt();return;}
   editingId=null;
@@ -272,23 +233,23 @@ document.getElementById('btnChangeKey').addEventListener('click',function(){
 });
 
 async function saveField(){
-  var name   =document.getElementById('fName').value.trim();
-  var ha     =parseFloat(document.getElementById('fHa').value);
-  var fec    =parseFloat(document.getElementById('fFec').value);
+  var name=document.getElementById('fName').value.trim();
+  var ha=parseFloat(document.getElementById('fHa').value);
+  var fec=parseFloat(document.getElementById('fFec').value);
   var fecDate=document.getElementById('fFecDate').value;
-  var start  =document.getElementById('fStart').value;
-  var end    =document.getElementById('fEnd').value;
-  var ewes   =parseInt(document.getElementById('fEwes').value)||0;
-  var lambs  =parseInt(document.getElementById('fLambs').value)||0;
-  var errEl  =document.getElementById('formErr');
+  var start=document.getElementById('fStart').value;
+  var end=document.getElementById('fEnd').value;
+  var ewes=parseInt(document.getElementById('fEwes').value)||0;
+  var lambs=parseInt(document.getElementById('fLambs').value)||0;
+  var errEl=document.getElementById('formErr');
   var missing=[];
-  if(!name)             missing.push('Field Name');
-  if(isNaN(ha)||ha<=0)  missing.push('Field Size');
-  if(isNaN(fec)||fec<0) missing.push('FEC Result');
-  if(!fecDate)          missing.push('Date of FEC');
-  if(!start)            missing.push('Grazing Start');
-  if(!end)              missing.push('Grazing End');
-  if(!ewes&&!lambs)     missing.push('Ewes or Lambs');
+  if(!name)missing.push('Field Name');
+  if(isNaN(ha)||ha<=0)missing.push('Field Size');
+  if(isNaN(fec)||fec<0)missing.push('FEC Result');
+  if(!fecDate)missing.push('Date of FEC');
+  if(!start)missing.push('Grazing Start');
+  if(!end)missing.push('Grazing End');
+  if(!ewes&&!lambs)missing.push('Ewes or Lambs');
   if(missing.length){errEl.innerHTML='<div class="err">Missing: <strong>'+missing.join(', ')+'</strong></div>';return;}
   if(new Date(start)>=new Date(TODAY)){errEl.innerHTML='<div class="err">Grazing start must be before today.</div>';return;}
   if(new Date(end)<=new Date(start)){errEl.innerHTML='<div class="err">Grazing end must be after start.</div>';return;}
@@ -296,7 +257,7 @@ async function saveField(){
   var stockDensity=(ewes+lambs)/ha;
   var entry={id:id,name:name,ha:ha,fec:fec,fecDate:fecDate,start:start,end:end,
     ewes:ewes,lambs:lambs,stockDensity:stockDensity,status:'loading',result:null,error:null};
-  if(editingId) fields=fields.map(function(x){return x.id===editingId?entry:x;});
+  if(editingId)fields=fields.map(function(x){return x.id===editingId?entry:x;});
   else fields.push(entry);
   editingId=null;selId=id;
   document.getElementById('overlay').style.display='none';
@@ -304,53 +265,42 @@ async function saveField(){
   try{
     var weather=await getWeather(start);
     var allDays=weather.historical.concat(weather.forecast);
-    // Fill any gap between end of historical and start of forecast
-    if(weather.historical.length && weather.forecast.length){
+    if(weather.historical.length&&weather.forecast.length){
       var lastHist=new Date(weather.historical[weather.historical.length-1].date);
       var firstFcast=new Date(weather.forecast[0].date);
-      var gap=[];
-      var d=new Date(lastHist);d.setDate(d.getDate()+1);
-      while(d<firstFcast){
-        gap.push({date:d.toISOString().slice(0,10),temp:10,rain:0,solar:10,forecast:false});
-        d.setDate(d.getDate()+1);
-      }
+      var gap=[],gd=new Date(lastHist);gd.setDate(gd.getDate()+1);
+      while(gd<firstFcast){gap.push({date:gd.toISOString().slice(0,10),temp:10,rain:0,solar:10,forecast:false});gd.setDate(gd.getDate()+1);}
       allDays=weather.historical.concat(gap,weather.forecast);
     }
     var spResults={};
     SPECIES.forEach(function(sp){spResults[sp.key]=runGloWorm(allDays,end,fec,ewes,lambs,ha,sp);});
     var h=weather.historical;
-    var avgTemp =h.reduce(function(a,b){return a+(b.temp||0);},0)/h.length;
+    var avgTemp=h.reduce(function(a,b){return a+(b.temp||0);},0)/h.length;
     var totalRain=h.reduce(function(a,b){return a+(b.rain||0);},0);
-    var avgSolar =h.reduce(function(a,b){return a+(b.solar||0);},0)/h.length;
-    for(var i=0;i<fields.length;i++) if(fields[i].id===id){
-      fields[i].status='done';
-      fields[i].result={
-        species:spResults,
-        weather:allDays,
-        avgTemp:avgTemp,
-        totalRain:totalRain,
-        avgSolar:avgSolar,
-        forecastStart:weather.forecastStartStr,  // ← fixed: use the string from the returned object
-        forecastError:weather.forecastError
-      };
-      break;
+    var avgSolar=h.reduce(function(a,b){return a+(b.solar||0);},0)/h.length;
+    for(var i=0;i<fields.length;i++){
+      if(fields[i].id===id){
+        fields[i].status='done';
+        fields[i].result={species:spResults,weather:allDays,avgTemp:avgTemp,totalRain:totalRain,
+          avgSolar:avgSolar,forecastStart:weather.forecastStartStr,forecastError:weather.forecastError};
+        break;
+      }
     }
     saveFields();
   }catch(e){
-    for(var i=0;i<fields.length;i++) if(fields[i].id===id){fields[i].status='error';fields[i].error=e.message;break;}
+    for(var i=0;i<fields.length;i++){if(fields[i].id===id){fields[i].status='error';fields[i].error=e.message;break;}}
     saveFields();
   }
   renderSidebar();if(selId===id)renderMain();
 }
 
-// ── Sidebar ───────────────────────────────────────────────────────────────────
 function renderSidebar(){
   var el=document.getElementById('fieldList');
   if(!fields.length){el.innerHTML='<p style="padding:12px;font-size:13px;color:#6c757d">No fields yet.</p>';return;}
   el.innerHTML=fields.map(function(f){
     var b='<span class="badge pending">Pending</span>';
-    if(f.status==='loading') b='<span class="badge pending">Analysing...</span>';
-    else if(f.status==='error') b='<span class="badge veryhigh">Error</span>';
+    if(f.status==='loading')b='<span class="badge pending">Analysing...</span>';
+    else if(f.status==='error')b='<span class="badge veryhigh">Error</span>';
     else if(f.result){
       var maxH=0;
       SPECIES.forEach(function(s){if(f.result.species[s.key].currentH>maxH)maxH=f.result.species[s.key].currentH;});
@@ -365,16 +315,24 @@ function renderSidebar(){
 function selField(id){selId=id;renderSidebar();renderMain();}
 
 // ── Charts ────────────────────────────────────────────────────────────────────
+function getChartMax(spResults){
+  var mx=0;
+  SPECIES.forEach(function(sp){spResults[sp.key].days.forEach(function(d){if(d.larvalH>mx)mx=d.larvalH;if(d.larval>mx)mx=d.larval;});});
+  return mx||1;
+}
+function getDays0(spResults){
+  return SPECIES.reduce(function(best,sp){var d=spResults[sp.key].days;return d.length>best.length?d:best;},[]);
+}
+
 function drawParasiteOnCanvas(canvas,spResults,grazingEnd,forecastStart,W,H){
   var ctx=canvas.getContext('2d');ctx.clearRect(0,0,W,H);
   var pl=72,pr=16,pt=18,pb=34,cw=W-pl-pr,ch=H-pt-pb;
-  var mx=0;SPECIES.forEach(function(sp){spResults[sp.key].days.forEach(function(d){if(d.larvalH>mx)mx=d.larvalH;if(d.larval>mx)mx=d.larval;});});
-  if(!mx)mx=1;
-  // Use the longest species day array as the x-axis reference
-  var days0=SPECIES.reduce(function(best,sp){
-    var d=spResults[sp.key].days;return d.length>best.length?d:best;
-  },[]);
+  var mx=getChartMax(spResults);
+  var days0=getDays0(spResults);
   var n=days0.length;if(!n)return;
+  function iX(i){return pl+(i/Math.max(n-1,1))*cw;}
+  function dateX(ds){for(var i=0;i<n;i++)if(days0[i].date>=ds)return iX(i);return iX(n-1);}
+
   ctx.save();ctx.font='10px system-ui';ctx.fillStyle='#999';ctx.textAlign='center';
   ctx.translate(11,pt+ch/2);ctx.rotate(-Math.PI/2);ctx.fillText('L3 larvae / ha',0,0);ctx.restore();
   ctx.font='10px system-ui';ctx.textAlign='right';
@@ -384,53 +342,48 @@ function drawParasiteOnCanvas(canvas,spResults,grazingEnd,forecastStart,W,H){
     ctx.strokeStyle='#ececec';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(pl,gy);ctx.lineTo(pl+cw,gy);ctx.stroke();
   });
   ctx.strokeStyle='#ccc';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(pl,pt);ctx.lineTo(pl,pt+ch);ctx.lineTo(pl+cw,pt+ch);ctx.stroke();
-  function dateX(ds){for(var i=0;i<days0.length;i++)if(days0[i].date.slice(0,10)>=ds)return pl+(i/Math.max(n-1,1))*cw;return pl+cw;}
 
   var gx=dateX(grazingEnd);
-  ctx.strokeStyle='#ccc';ctx.lineWidth=1;ctx.setLineDash([3,3]);ctx.beginPath();ctx.moveTo(gx,pt);ctx.lineTo(gx,pt+ch);ctx.stroke();
+  ctx.strokeStyle='#ccc';ctx.lineWidth=1;ctx.setLineDash([3,3]);
+  ctx.beginPath();ctx.moveTo(gx,pt);ctx.lineTo(gx,pt+ch);ctx.stroke();
   ctx.setLineDash([]);ctx.fillStyle='#aaa';ctx.textAlign='left';ctx.font='9px system-ui';ctx.fillText('Grazing end',gx+3,pt+10);
 
   if(forecastStart){
     var fx=dateX(forecastStart);
-    ctx.strokeStyle='#555';ctx.lineWidth=1.5;ctx.setLineDash([4,3]);ctx.beginPath();ctx.moveTo(fx,pt);ctx.lineTo(fx,pt+ch);ctx.stroke();
+    ctx.fillStyle='rgba(0,0,0,0.03)';ctx.fillRect(fx,pt,iX(n-1)-fx,ch);
+    ctx.strokeStyle='#555';ctx.lineWidth=1.5;ctx.setLineDash([4,3]);
+    ctx.beginPath();ctx.moveTo(fx,pt);ctx.lineTo(fx,pt+ch);ctx.stroke();
     ctx.setLineDash([]);ctx.fillStyle='#555';ctx.textAlign='left';ctx.font='9px system-ui';ctx.fillText('Today',fx+3,pt+22);
-    ctx.fillStyle='rgba(0,0,0,0.03)';ctx.fillRect(fx,pt,pl+cw-fx,ch);
   }
 
   SPECIES.forEach(function(sp){
-    var spDays=spResults[sp.key].days;
-    var spN=spDays.length;
-    var fIdx=spN;
-    if(forecastStart){
-      for(var i=0;i<spN;i++){if(spDays[i].date.slice(0,10)>=forecastStart){fIdx=i;break;}}
-    }
-    // Primary: L3h on herbage — solid historical, dashed forecast
+    var spDays=spResults[sp.key].days,spN=spDays.length,fIdx=spN;
+    if(forecastStart){for(var i=0;i<spN;i++){if(spDays[i].date>=forecastStart){fIdx=i;break;}}}
+    // L3h primary line
     ctx.strokeStyle=sp.color;ctx.lineWidth=2;ctx.lineJoin='round';ctx.setLineDash([]);ctx.beginPath();
-    for(var i=0;i<Math.min(fIdx+1,spN);i++){
-      var px=pl+(i/Math.max(n-1,1))*cw,py=pt+ch-(spDays[i].larvalH/mx)*ch;
-      if(i===0)ctx.moveTo(px,py);else ctx.lineTo(px,py);
-    }
+    for(var i=0;i<Math.min(fIdx+1,spN);i++){var px=iX(i),py=pt+ch-(spDays[i].larvalH/mx)*ch;if(i===0)ctx.moveTo(px,py);else ctx.lineTo(px,py);}
     ctx.stroke();
     if(fIdx<spN){
-      ctx.strokeStyle=sp.color;ctx.lineWidth=2;ctx.setLineDash([6,4]);ctx.beginPath();
-      for(var i=Math.max(0,fIdx-1);i<spN;i++){
-        var px=pl+(i/Math.max(n-1,1))*cw,py=pt+ch-(spDays[i].larvalH/mx)*ch;
-        if(i===Math.max(0,fIdx-1))ctx.moveTo(px,py);else ctx.lineTo(px,py);
-      }
+      ctx.setLineDash([6,4]);ctx.beginPath();
+      for(var i=Math.max(0,fIdx-1);i<spN;i++){var px=iX(i),py=pt+ch-(spDays[i].larvalH/mx)*ch;if(i===Math.max(0,fIdx-1))ctx.moveTo(px,py);else ctx.lineTo(px,py);}
       ctx.stroke();ctx.setLineDash([]);
     }
-    // Secondary: total L3p — faint dotted across full range
+    // L3p faint secondary
     ctx.strokeStyle=sp.color;ctx.lineWidth=1;ctx.globalAlpha=0.3;ctx.setLineDash([2,3]);ctx.beginPath();
-    for(var i=0;i<spN;i++){
-      var px=pl+(i/Math.max(n-1,1))*cw,py=pt+ch-(spDays[i].larval/mx)*ch;
-      if(i===0)ctx.moveTo(px,py);else ctx.lineTo(px,py);
-    }
+    for(var i=0;i<spN;i++){var px=iX(i),py=pt+ch-(spDays[i].larval/mx)*ch;if(i===0)ctx.moveTo(px,py);else ctx.lineTo(px,py);}
     ctx.stroke();ctx.globalAlpha=1.0;ctx.setLineDash([]);
+    // Dots
+    for(var i=0;i<spN;i++){
+      var px=iX(i),py=pt+ch-(spDays[i].larvalH/mx)*ch;
+      ctx.beginPath();ctx.arc(px,py,3,0,Math.PI*2);
+      ctx.fillStyle='#fff';ctx.fill();
+      ctx.strokeStyle=sp.color;ctx.lineWidth=1.5;ctx.stroke();
+    }
   });
 
   ctx.fillStyle='#aaa';ctx.textAlign='center';ctx.font='10px system-ui';ctx.setLineDash([]);
   var skip=Math.max(1,Math.floor(n/8));
-  for(var i=0;i<n;i++)if(i%skip===0||i===n-1)ctx.fillText(days0[i].date.slice(0,10).slice(5),pl+(i/Math.max(n-1,1))*cw,H-8);
+  for(var i=0;i<n;i++)if(i%skip===0||i===n-1)ctx.fillText(days0[i].date.slice(5),iX(i),H-8);
 }
 
 function drawWeatherOnCanvas(canvas,weather,grazingEnd,forecastStart,W,H){
@@ -442,6 +395,8 @@ function drawWeatherOnCanvas(canvas,weather,grazingEnd,forecastStart,W,H){
   var sunHrs=weather.map(function(d){return d.solar!=null?d.solar/2:0;});
   var maxT=Math.max.apply(null,temps)||1,minT=Math.min.apply(null,temps);
   var maxR=Math.max.apply(null,rains)||1,maxSun=Math.max.apply(null,sunHrs)||1;
+  function iX(i){return pl+(i/Math.max(n-1,1))*cw;}
+  function dateX(ds){for(var i=0;i<n;i++)if(weather[i].date>=ds)return iX(i);return iX(n-1);}
   var skip=Math.max(1,Math.floor(n/8));
   ctx.font='9px system-ui';
   [0,0.25,0.5,0.75,1].forEach(function(frac){
@@ -454,49 +409,42 @@ function drawWeatherOnCanvas(canvas,weather,grazingEnd,forecastStart,W,H){
     ctx.fillStyle='#aaa';ctx.textAlign='left';ctx.fillText((frac*maxR).toFixed(1)+'mm',pl+cw+3,gy+3);
   });
   ctx.strokeStyle='#ccc';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(pl,pt);ctx.lineTo(pl,pt+ch);ctx.lineTo(pl+cw,pt+ch);ctx.stroke();
-  function dateX(ds){for(var i=0;i<weather.length;i++)if(weather[i].date.slice(0,10)>=ds)return pl+(i/Math.max(n-1,1))*cw;return pl+cw;}
-
   var gx=dateX(grazingEnd);
   ctx.strokeStyle='#ccc';ctx.lineWidth=1;ctx.setLineDash([3,3]);ctx.beginPath();ctx.moveTo(gx,pt);ctx.lineTo(gx,pt+ch);ctx.stroke();
   ctx.setLineDash([]);ctx.fillStyle='#aaa';ctx.textAlign='left';ctx.font='9px system-ui';ctx.fillText('Grazing end',gx+3,pt+10);
-
-  var fIdx=weather.length;
+  var fIdx=n;
   if(forecastStart){
-    for(var i=0;i<weather.length;i++){if(weather[i].date.slice(0,10)>=forecastStart){fIdx=i;break;}}
+    for(var i=0;i<n;i++){if(weather[i].date>=forecastStart){fIdx=i;break;}}
     var fx=dateX(forecastStart);
-    ctx.fillStyle='rgba(0,0,0,0.03)';ctx.fillRect(fx,pt,pl+cw-fx,ch);
+    ctx.fillStyle='rgba(0,0,0,0.03)';ctx.fillRect(fx,pt,iX(n-1)-fx,ch);
     ctx.strokeStyle='#555';ctx.lineWidth=1.5;ctx.setLineDash([4,3]);
     ctx.beginPath();ctx.moveTo(fx,pt);ctx.lineTo(fx,pt+ch);ctx.stroke();
-    ctx.setLineDash([]);ctx.fillStyle='#555';ctx.textAlign='left';ctx.font='9px system-ui';
-    ctx.fillText('Today',fx+3,pt+10);
+    ctx.setLineDash([]);ctx.fillStyle='#555';ctx.textAlign='left';ctx.font='9px system-ui';ctx.fillText('Today',fx+3,pt+10);
   }
-
   var bw=Math.max(1,cw/n-1);
   rains.forEach(function(r,i){
-    var x=pl+(i/Math.max(n-1,1))*cw-bw/2,bh=(r/maxR)*ch*0.6;
+    var x=iX(i)-bw/2,bh=(r/maxR)*ch*0.6;
     ctx.fillStyle=i>=fIdx?'rgba(52,152,219,0.25)':'rgba(52,152,219,0.5)';
     ctx.fillRect(x,pt+ch-bh,bw,bh);
   });
-
   ctx.strokeStyle='#f39c12';ctx.lineWidth=1.5;ctx.lineJoin='round';ctx.setLineDash([]);ctx.beginPath();
-  for(var i=0;i<Math.min(fIdx+1,n);i++){var x=pl+(i/Math.max(n-1,1))*cw,y=pt+ch-(sunHrs[i]/maxSun)*ch;if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);}
+  for(var i=0;i<Math.min(fIdx+1,n);i++){var x=iX(i),y=pt+ch-(sunHrs[i]/maxSun)*ch;if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);}
   ctx.stroke();
   if(fIdx<n){
     ctx.setLineDash([6,4]);ctx.beginPath();
-    for(var i=Math.max(0,fIdx-1);i<n;i++){var x=pl+(i/Math.max(n-1,1))*cw,y=pt+ch-(sunHrs[i]/maxSun)*ch;if(i===Math.max(0,fIdx-1))ctx.moveTo(x,y);else ctx.lineTo(x,y);}
+    for(var i=Math.max(0,fIdx-1);i<n;i++){var x=iX(i),y=pt+ch-(sunHrs[i]/maxSun)*ch;if(i===Math.max(0,fIdx-1))ctx.moveTo(x,y);else ctx.lineTo(x,y);}
     ctx.stroke();ctx.setLineDash([]);
   }
-
   ctx.strokeStyle='#e74c3c';ctx.lineWidth=2;ctx.lineJoin='round';ctx.setLineDash([]);ctx.beginPath();
-  for(var i=0;i<Math.min(fIdx+1,n);i++){var x=pl+(i/Math.max(n-1,1))*cw,y=pt+ch-((temps[i]-minT)/(maxT-minT||1))*ch;if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);}
+  for(var i=0;i<Math.min(fIdx+1,n);i++){var x=iX(i),y=pt+ch-((temps[i]-minT)/(maxT-minT||1))*ch;if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);}
   ctx.stroke();
   if(fIdx<n){
     ctx.setLineDash([6,4]);ctx.beginPath();
-    for(var i=Math.max(0,fIdx-1);i<n;i++){var x=pl+(i/Math.max(n-1,1))*cw,y=pt+ch-((temps[i]-minT)/(maxT-minT||1))*ch;if(i===Math.max(0,fIdx-1))ctx.moveTo(x,y);else ctx.lineTo(x,y);}
+    for(var i=Math.max(0,fIdx-1);i<n;i++){var x=iX(i),y=pt+ch-((temps[i]-minT)/(maxT-minT||1))*ch;if(i===Math.max(0,fIdx-1))ctx.moveTo(x,y);else ctx.lineTo(x,y);}
     ctx.stroke();ctx.setLineDash([]);
   }
   ctx.fillStyle='#aaa';ctx.textAlign='center';ctx.font='9px system-ui';ctx.setLineDash([]);
-  for(var i=0;i<n;i++)if(i%skip===0||i===n-1)ctx.fillText(weather[i].date.slice(0,10).slice(5),pl+(i/Math.max(n-1,1))*cw,H-8);
+  for(var i=0;i<n;i++)if(i%skip===0||i===n-1)ctx.fillText(weather[i].date.slice(5),iX(i),H-8);
 }
 
 function sizeCanvas(id,drawFn,H){
@@ -504,44 +452,41 @@ function sizeCanvas(id,drawFn,H){
   var W=c.parentElement.offsetWidth||560;
   c.width=W;c.height=H;c.style.width=W+'px';c.style.height=H+'px';drawFn(c,W,H);
 }
+
 function attachParasiteHover(canvasId,spResults){
   var c=document.getElementById(canvasId);if(!c)return;
-  var days0=SPECIES.reduce(function(best,sp){var d=spResults[sp.key].days;return d.length>best.length?d:best;},[]);
+  var days0=getDays0(spResults);
   var n=days0.length;if(!n)return;
-
-  // Use a wrapper div for positioning context
-  var wrap=c.parentElement;
-  wrap.style.position='relative';
-
-  var tip=document.createElement('div');
-  tip.style.cssText='position:absolute;background:rgba(20,20,20,0.92);color:#fff;padding:8px 12px;border-radius:8px;font-size:12px;line-height:1.7;pointer-events:none;display:none;z-index:9999;white-space:nowrap;box-shadow:0 4px 12px rgba(0,0,0,0.3)';
-  wrap.appendChild(tip);
-  c.style.cursor='crosshair';
+  var tip=document.getElementById('chartTip');
 
   c.addEventListener('mousemove',function(e){
     var rect=c.getBoundingClientRect();
-    var pl=72,pr=16;
+    var pl=72,pr=16,pt=18,pb=34;
     var cssX=e.clientX-rect.left;
+    var cssY=e.clientY-rect.top;
     var cw=rect.width-pl-pr;
-    if(cssX<pl||cssX>rect.width-pr){tip.style.display='none';return;}
+    var ch=rect.height-pt-pb;
+    if(cssX<pl||cssX>rect.width-pr||cssY<pt||cssY>pt+ch){tip.style.display='none';return;}
     var idx=Math.round((cssX-pl)/cw*(n-1));
     idx=Math.max(0,Math.min(n-1,idx));
-    var d=days0[idx];if(!d){tip.style.display='none';return;}
-    var html='<strong>'+d.date.slice(0,10)+'</strong>';
+    var mx=getChartMax(spResults);
+    // Find closest species line in Y
+    var closestSp=null,closestDist=Infinity;
     SPECIES.forEach(function(sp){
-      var sd=spResults[sp.key].days[idx];
-      if(sd){
-        html+='<br><span style="color:'+sp.color+'">●</span> '+sp.name
-          +'<br>&nbsp;&nbsp;L3h: <strong>'+Math.round(sd.larvalH).toLocaleString()+'</strong> /ha'
-          +'<br>&nbsp;&nbsp;L3p: <strong>'+Math.round(sd.larval).toLocaleString()+'</strong> /ha';
-      }
+      var sd=spResults[sp.key].days[idx];if(!sd)return;
+      var lineY=pt+ch-(sd.larvalH/mx)*ch;
+      var dist=Math.abs(cssY-lineY);
+      if(dist<closestDist){closestDist=dist;closestSp=sp;}
     });
-    tip.innerHTML=html;
-    // position relative to wrapper
-    var wRect=wrap.getBoundingClientRect();
-    var tx=e.clientX-wRect.left+12;
-    var ty=e.clientY-wRect.top-10;
-    if(tx+220>wrap.offsetWidth)tx=e.clientX-wRect.left-230;
+    if(!closestSp||closestDist>50){tip.style.display='none';return;}
+    var sd=spResults[closestSp.key].days[idx];
+    tip.innerHTML='<strong>'+days0[idx].date+'</strong>'
+      +'<br><span style="color:'+closestSp.color+'">●</span> '+closestSp.name
+      +'<br>&nbsp;&nbsp;L3h: <strong>'+Math.round(sd.larvalH).toLocaleString()+'</strong> /ha'
+      +'<br>&nbsp;&nbsp;L3p: <strong>'+Math.round(sd.larval).toLocaleString()+'</strong> /ha';
+    var tx=e.clientX+16,ty=e.clientY-10;
+    if(tx+230>window.innerWidth)tx=e.clientX-240;
+    if(ty+tip.offsetHeight>window.innerHeight)ty=e.clientY-tip.offsetHeight-10;
     tip.style.left=tx+'px';tip.style.top=ty+'px';
     tip.style.display='block';
   });
@@ -551,7 +496,8 @@ function attachParasiteHover(canvasId,spResults){
 function expandChart(drawFn,title){
   var ov=document.createElement('div');ov.className='chart-overlay';
   var inner=document.createElement('div');inner.className='chart-overlay-inner';
-  inner.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><div style="font-size:14px;font-weight:600">'+title+'</div>'
+  inner.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">'
+    +'<div style="font-size:14px;font-weight:600">'+title+'</div>'
     +'<button id="btnCX" style="background:#e9ecef;border:none;border-radius:6px;padding:5px 12px;cursor:pointer;font-size:12px">Close</button></div>'
     +'<canvas id="cExp"></canvas>';
   ov.appendChild(inner);document.body.appendChild(ov);
@@ -564,66 +510,73 @@ function expandChart(drawFn,title){
   },60);
 }
 
-// ── Main panel ────────────────────────────────────────────────────────────────
 function renderMain(){
   var el=document.getElementById('main');
   if(!METEOSTAT_KEY){showKeyPrompt();return;}
   var f=fields.find(function(x){return x.id===selId;});
   if(!f){
-    el.innerHTML='<div class="center"><div style="font-size:48px;margin-bottom:12px">🌱</div><h2 style="color:#333;margin-bottom:6px">No field selected</h2><p>Add a field using the button in the sidebar.</p></div>';
+    el.innerHTML='<div class="center"><div style="font-size:48px;margin-bottom:12px">🌱</div>'
+      +'<h2 style="color:#333;margin-bottom:6px">No field selected</h2><p>Add a field using the button in the sidebar.</p></div>';
     return;
   }
   if(f.status==='loading'){
-    el.innerHTML='<div class="center"><div class="spinner"></div><div style="font-size:14px;font-weight:500">Fetching weather & running GloWorm-FL...</div><div style="font-size:12px;margin-top:6px;opacity:.7">This takes a few seconds</div></div>';
+    el.innerHTML='<div class="center"><div class="spinner"></div>'
+      +'<div style="font-size:14px;font-weight:500">Fetching weather & running GloWorm-FL...</div>'
+      +'<div style="font-size:12px;margin-top:6px;opacity:.7">This takes a few seconds</div></div>';
     return;
   }
   if(f.status==='error'){
     el.innerHTML='<div style="max-width:560px"><div class="err"><strong>Error:</strong> '+f.error+'</div>'
       +'<button id="btnDelErr" class="btn-red btn-sm" style="margin-top:12px">Delete Field</button></div>';
     document.getElementById('btnDelErr').addEventListener('click',function(){
-      var fid=selId;if(!confirm('Delete this field?'))return;
-      fields=fields.filter(function(x){return x.id!==fid;});
+      if(!confirm('Delete this field?'))return;
+      fields=fields.filter(function(x){return x.id!==selId;});
       saveFields();selId=null;renderSidebar();renderMain();
     });
     return;
   }
+
   var r=f.result,sp=r.species;
-  // Days safe if grazing started today: run GloWorm forward from TODAY using forecast weather only
-  var todayForecastDays=r.weather.filter(function(d){return d.date>=TODAY;});
-  var safeDaysFromToday={};
+
+  // Safe grazing from today
+  var todayDays=r.weather.filter(function(d){return d.date>=TODAY;});
+  var safeFromToday={};
   SPECIES.forEach(function(s){
-    var res=runGloWorm(todayForecastDays,todayForecastDays.length?todayForecastDays[todayForecastDays.length-1].date:TODAY,f.fec,f.ewes,f.lambs,f.ha,s);
+    if(!todayDays.length){safeFromToday[s.key]=null;return;}
+    var res=runGloWorm(todayDays,todayDays[todayDays.length-1].date,f.fec,f.ewes,f.lambs,f.ha,s);
     var safe=null;
     for(var j=0;j<res.days.length;j++){if(res.days[j].larval>1000){safe=j;break;}}
-    safeDaysFromToday[s.key]=safe;
+    safeFromToday[s.key]=safe;
   });
 
-  var safePanel='<div class="card" style="margin-bottom:14px"><h3>Days Safe Grazing if Turned Out Today</h3>'
-    +'<p style="font-size:11px;color:#6c757d;margin-bottom:10px">Based on forecast weather from '+TODAY+'. Days until L3p exceeds 1,000 /ha.</p>'
-    +'<div style="display:grid;grid-template-columns:repeat('+SPECIES.length+',1fr);gap:14px">'
-    +SPECIES.map(function(s){
-      var ds=safeDaysFromToday[s.key];
-      return '<div style="text-align:center;padding:12px;border-radius:8px;background:#f8f9fa;border:1px solid #dee2e6">'
-        +'<div style="font-size:11px;font-weight:600;color:#6c757d;margin-bottom:6px">'
-        +'<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+s.color+';margin-right:4px;vertical-align:middle"></span>'
-        +s.name+'</div>'
-        +(ds===null
-          ?'<div style="font-size:26px;font-weight:700;color:#333">&gt;14</div><div style="font-size:11px;color:#6c757d">days (beyond forecast window)</div>'
-          :'<div style="font-size:32px;font-weight:700;color:#333">'+ds+'<span style="font-size:13px;font-weight:400;color:#6c757d"> days</span></div>'
-          +'<div style="font-size:11px;color:#6c757d">until significant challenge</div>')
-        +'</div>';
-    }).join('')
-    +'</div></div>';
+  var cards=SPECIES.map(function(s){
     var sr=sp[s.key];
-    return '<div class="rcard" style="background:#f8f9fa;border-color:#dee2e6">'
-      +'<div class="spname" style="color:#6c757d"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:'+s.color+';margin-right:5px;vertical-align:middle"></span>'+s.name+'</div>'
-      +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">'
-      +'<div><div style="font-size:10px;color:#6c757d">L3h on herbage (today)</div><div style="font-size:18px;font-weight:700;color:#333">'+Math.round(sr.currentH).toLocaleString()+'<span style="font-size:11px;font-weight:400;color:#6c757d"> /ha</span></div></div>'
-      +'<div><div style="font-size:10px;color:#6c757d">Total L3p on pasture</div><div style="font-size:18px;font-weight:700;color:#333">'+Math.round(sr.current).toLocaleString()+'<span style="font-size:11px;font-weight:400;color:#6c757d"> /ha</span></div></div>'
-      +'<div><div style="font-size:10px;color:#6c757d">Peak L3p (season)</div><div style="font-size:18px;font-weight:700;color:#333">'+Math.round(sr.peak).toLocaleString()+'<span style="font-size:11px;font-weight:400;color:#6c757d"> /ha</span></div></div>'
+    return '<div class="rcard">'
+      +'<div class="spname"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+s.color+';margin-right:5px;vertical-align:middle"></span>'+s.name+'</div>'
+      +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'
+      +'<div><div style="font-size:10px;color:#6c757d">L3h on herbage (today)</div><div style="font-size:18px;font-weight:700">'+Math.round(sr.currentH).toLocaleString()+'<span style="font-size:11px;font-weight:400;color:#6c757d"> /ha</span></div></div>'
+      +'<div><div style="font-size:10px;color:#6c757d">Total L3p on pasture</div><div style="font-size:18px;font-weight:700">'+Math.round(sr.current).toLocaleString()+'<span style="font-size:11px;font-weight:400;color:#6c757d"> /ha</span></div></div>'
+      +'<div><div style="font-size:10px;color:#6c757d">Peak L3p (season)</div><div style="font-size:18px;font-weight:700">'+Math.round(sr.peak).toLocaleString()+'<span style="font-size:11px;font-weight:400;color:#6c757d"> /ha</span></div></div>'
       +'</div></div>';
   }).join('');
-  var leg=SPECIES.map(function(s){return '<span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:#6c757d;margin-right:14px"><span style="display:inline-block;width:22px;height:3px;border-radius:2px;background:'+s.color+'"></span>'+s.name+'</span>';}).join('');
+
+  var safeCards=SPECIES.map(function(s){
+    var ds=safeFromToday[s.key];
+    return '<div style="text-align:center;padding:12px;border-radius:8px;background:#f8f9fa;border:1px solid #dee2e6">'
+      +'<div style="font-size:11px;font-weight:600;color:#6c757d;margin-bottom:6px">'
+      +'<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+s.color+';margin-right:4px;vertical-align:middle"></span>'+s.name+'</div>'
+      +(ds===null
+        ?'<div style="font-size:26px;font-weight:700;color:#333">&gt;14</div><div style="font-size:11px;color:#6c757d">days (beyond forecast window)</div>'
+        :'<div style="font-size:32px;font-weight:700;color:#333">'+ds+'<span style="font-size:13px;font-weight:400;color:#6c757d"> days</span></div>'
+        +'<div style="font-size:11px;color:#6c757d">until L3p exceeds 1,000 /ha</div>')
+      +'</div>';
+  }).join('');
+
+  var leg=SPECIES.map(function(s){
+    return '<span style="display:inline-flex;align-items:center;gap:5px">'
+      +'<span style="display:inline-block;width:22px;height:3px;border-radius:2px;background:'+s.color+'"></span>'+s.name+' L3h</span>';
+  }).join('');
+
   el.innerHTML='<div class="dh"><div><h2>'+f.name+'</h2>'
     +'<div class="meta">'+f.ha+' ha · '+f.ewes+' ewes · '+f.lambs+' lambs · '
     +Math.round(f.stockDensity*10)/10+' /ha · FEC '+f.fec+' epg · '+f.start+' → '+f.end+'</div>'
@@ -631,27 +584,26 @@ function renderMain(){
     +'<button id="btnEdit" class="btn-grey btn-sm">Edit</button>'
     +'<button id="btnDel" class="btn-red btn-sm">Delete</button>'
     +'</div></div>'
-    +'<div class="cards3">'+cards+'</div>'
-    +safePanel
-    +'<div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:10px;font-size:11px;color:#6c757d;align-items:center">'
-    +SPECIES.map(function(s){return '<span style="display:inline-flex;align-items:center;gap:5px">'
-      +'<span style="display:inline-block;width:22px;height:3px;border-radius:2px;background:'+s.color+'"></span>'
-      +s.name+' (herbage L3h)</span>';}).join('')
-    +SPECIES.map(function(s){return '<span style="display:inline-flex;align-items:center;gap:5px">'
-      +'<span style="display:inline-block;width:22px;border-top:2px dotted '+s.color+';opacity:0.5"></span>'
-      +s.name+' (total L3p)</span>';}).join('')
-    +'<span style="display:inline-flex;align-items:center;gap:5px">'
-    +'<span style="display:inline-block;width:22px;border-top:2px dashed #888"></span>'
-    +'14-day forecast</span>'
+    +'<div class="cards2">'+cards+'</div>'
+    +'<div class="card" style="margin-bottom:14px">'
+    +'<h3>Days Safe Grazing if Turned Out Today</h3>'
+    +'<p style="font-size:11px;color:#6c757d;margin:4px 0 10px">Forecast from '+TODAY+'. Days until L3p exceeds 1,000 /ha.</p>'
+    +'<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:14px">'+safeCards+'</div>'
     +'</div>'
-    +'<div class="chart-wrap" id="cParWrap" title="Click to expand"><canvas id="cMain"></canvas></div></div>'
-    +'<div class="card"><h3>Weather — '+f.start+' to Today · Herstmonceux station (03882)</h3>'
+    +'<div class="card">'
+    +'<h3>L3 on Herbage — '+f.start+' to +14 days</h3>'
+    +'<div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:10px;font-size:11px;color:#6c757d;align-items:center">'+leg
+    +'<span style="display:inline-flex;align-items:center;gap:5px">'
+    +'<span style="display:inline-block;width:22px;border-top:2px dashed #888"></span>14-day forecast</span></div>'
+    +'<div class="chart-wrap" id="cParWrap"><canvas id="cMain"></canvas></div>'
+    +'</div>'
+    +'<div class="card"><h3>Weather — '+f.start+' to Today · Herstmonceux (03882)</h3>'
     +'<div class="wleg">'
     +'<span><span style="display:inline-block;width:22px;height:3px;background:#e74c3c;border-radius:2px;vertical-align:middle"></span>Temp (°C)</span>'
     +'<span><span style="display:inline-block;width:12px;height:10px;background:rgba(52,152,219,0.5);vertical-align:middle"></span>Rainfall (mm)</span>'
     +'<span><span style="display:inline-block;width:22px;height:3px;background:#f39c12;border-radius:2px;vertical-align:middle"></span>Sun hours</span>'
     +'</div>'
-    +'<div class="chart-wrap" id="cWxWrap" title="Click to expand"><canvas id="cWeather"></canvas></div>'
+    +'<div class="chart-wrap" id="cWxWrap"><canvas id="cWeather"></canvas></div>'
     +(r.forecastError?'<div style="font-size:11px;color:#e67e22;margin-top:6px">⚠ Forecast unavailable: '+r.forecastError+'</div>':'')
     +'</div>'
     +'<div class="stats">'
@@ -660,6 +612,7 @@ function renderMain(){
     +'<div class="stat"><div class="lbl">Avg Solar</div><div class="val">'+r.avgSolar.toFixed(1)+'<span class="unit"> MJ/m²</span></div></div>'
     +'<div class="stat"><div class="lbl">Stocking Density</div><div class="val">'+Math.round(f.stockDensity*10)/10+'<span class="unit"> /ha</span></div></div>'
     +'</div>';
+
   document.getElementById('btnEdit').addEventListener('click',function(){
     document.getElementById('fName').value=f.name;
     document.getElementById('fHa').value=f.ha;
@@ -675,8 +628,8 @@ function renderMain(){
     document.getElementById('overlay').style.display='flex';
   });
   document.getElementById('btnDel').addEventListener('click',function(){
-    var fid=selId;if(!confirm('Delete this field?'))return;
-    fields=fields.filter(function(x){return x.id!==fid;});
+    if(!confirm('Delete this field?'))return;
+    fields=fields.filter(function(x){return x.id!==selId;});
     saveFields();selId=null;renderSidebar();renderMain();
   });
   document.getElementById('cParWrap').addEventListener('click',function(){
@@ -685,6 +638,7 @@ function renderMain(){
   document.getElementById('cWxWrap').addEventListener('click',function(){
     expandChart(function(c,W,H){drawWeatherOnCanvas(c,r.weather,f.end,r.forecastStart,W,H);},f.name+' — Weather');
   });
+
   setTimeout(function(){
     sizeCanvas('cMain',function(c,W,H){drawParasiteOnCanvas(c,sp,f.end,r.forecastStart,W,H);},240);
     sizeCanvas('cWeather',function(c,W,H){drawWeatherOnCanvas(c,r.weather,f.end,r.forecastStart,W,H);},200);
@@ -692,9 +646,8 @@ function renderMain(){
   },100);
 }
 
-// ── Init ──────────────────────────────────────────────────────────────────────
 renderSidebar();
-if(!METEOSTAT_KEY) showKeyPrompt(); else renderMain();
+if(!METEOSTAT_KEY)showKeyPrompt();else renderMain();
 
 })();
 </script>

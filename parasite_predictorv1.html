@@ -109,11 +109,10 @@ input:focus{border-color:#1a6b3c}
 
 var LAT=51.012511,LON=0.689743;
 var TODAY=new Date().toISOString().slice(0,10);
-var fields=JSON.parse(localStorage.getItem('paracast_fields')||'[]');
-fields.forEach(function(f){if(f.status==='loading'){f.status='error';f.error='Session ended before analysis completed. Please re-run.';}});
+var fields=[];
 var selId=null,editingId=null;
-var METEOSTAT_KEY=localStorage.getItem('paracast_key')||null;
-function saveFields(){localStorage.setItem('paracast_fields',JSON.stringify(fields));}
+var METEOSTAT_KEY=null;
+function saveFields(){}
 
 var SPECIES=[
   {key:'hc',name:'H. contortus',   color:'#e74c3c',devA:-0.09746,devB:0.01063,mu12c:[-1.47135,-0.11444,0.00327],mu3c:[-2.63080,-0.14407,0.00463],mu4c:[-3.68423,-0.25346,0.00740],mu3fromMu4:false,peWindow:4,C:0.1,m1opt:0.25,m1sub:0.051,m1dry:0.0},
@@ -212,7 +211,7 @@ function showKeyPrompt(){
   document.getElementById('btnSaveKey').addEventListener('click',function(){
     var k=document.getElementById('keyInput').value.trim();
     if(!k){document.getElementById('keyErr').textContent='Please enter your API key.';return;}
-    METEOSTAT_KEY=k;localStorage.setItem('paracast_key',k);renderMain();
+    METEOSTAT_KEY=k;renderMain();
   });
   document.getElementById('keyInput').addEventListener('keydown',function(e){if(e.key==='Enter')document.getElementById('btnSaveKey').click();});
 }
@@ -229,7 +228,7 @@ document.getElementById('btnCancel').addEventListener('click',function(){documen
 document.getElementById('overlay').addEventListener('click',function(e){if(e.target===this)this.style.display='none';});
 document.getElementById('btnSave').addEventListener('click',saveField);
 document.getElementById('btnChangeKey').addEventListener('click',function(){
-  METEOSTAT_KEY=null;localStorage.removeItem('paracast_key');showKeyPrompt();
+  METEOSTAT_KEY=null;showKeyPrompt();
 });
 
 async function saveField(){

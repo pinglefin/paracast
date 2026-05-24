@@ -129,24 +129,7 @@ var SPECIES=[
   {key:'hc',name:'H. contortus',   color:'#e74c3c',devA:-0.09746,devB:0.01063,mu12c:[-1.47135,-0.11444,0.00327],mu3c:[-2.63080,-0.14407,0.00463],mu4c:[-3.68423,-0.25346,0.00740],mu3fromMu4:false,peWindow:4, C:0.1,m1opt:0.25,m1sub:0.051,m1dry:0.0},
   {key:'tc',name:'T. circumcincta',color:'#2980b9',devA:-0.02085,devB:0.00467,mu12c:[-1.62026,-0.17771,0.00629],mu4c:[-4.58817,-0.13996,0.00461],mu3fromMu4:true, peWindow:7, C:0.1,m1opt:0.21,m1sub:0.025,m1dry:0.0}
 ];
-var RC={Low:'#27ae60',Moderate:'#f39c12',High:'#e67e22','Very High':'#c0392b'};
-var RB={Low:'#d4edda',Moderate:'#fff3cd',High:'#ffe0b2','Very High':'#f8d7da'};
-var RBD={Low:'#c3e6cb',Moderate:'#ffeeba',High:'#ffcc80','Very High':'#f5c6cb'};
-var RT={Low:'#155724',Moderate:'#856404',High:'#bf360c','Very High':'#721c24'};
-var RECS={
-  Low:'Low larval challenge. Continue normal monitoring.',
-  Moderate:'Moderate challenge. Monitor closely and consider targeted treatment.',
-  High:'High larval burden. Anthelmintic treatment strongly advised before re-entry.',
-  'Very High':'Very high risk. Treat immediately and move to clean pasture if possible.'
-};
-function riskLevel(v){return v<5?'Low':v<20?'Moderate':v<60?'High':'Very High';}
-function riskPct(r){return {Low:15,Moderate:42,High:68,'Very High':93}[r];}
-function badgeClass(r){return {Low:'low',Moderate:'moderate',High:'high','Very High':'veryhigh'}[r]||'pending';}
-function worstRisk(sp){
-  var order=['Low','Moderate','High','Very High'],w='Low';
-  SPECIES.forEach(function(s){if(order.indexOf(sp[s.key].riskLevel)>order.indexOf(w))w=sp[s.key].riskLevel;});
-  return w;
-}
+
 function polyMu(c,T){var v=c[0]+c[1]*T+c[2]*T*T+(c[3]?c[3]*T*T*T:0);return Math.min(1,Math.max(0,Math.exp(v)));}
 function calcM2(T){return Math.min(1,Math.max(0,Math.exp(-5.48240+0.45392*T-0.01252*T*T)));}
 function petMM(T){if(T<=0)return 0.1;return Math.max(0.1,0.0023*(T+17.8)*Math.sqrt(T)*0.408);}
@@ -189,7 +172,12 @@ function runGloWorm(days,grazingEnd,fec,ewes,lambs,ha,sp){
   var peak=out.length?Math.max.apply(null,out.map(function(x){return x.larval;})):0;
   var current=out.length?out[out.length-1].larval:0;
   var currentH=out.length?out[out.length-1].larvalH:0;
-  return {days:out,peak:peak,current:current,currentH:currentH,riskLevel:riskLevel(currentH)};
+  // Days safe grazing: first day L3p exceeds 1% of peak, counted from grazing start
+  var daysSafe=null;
+  for(var j=0;j<out.length;j++){
+    if(out[j].larval>100){daysSafe=j;break;}
+  }
+  return {days:out,peak:peak,current:current,currentH:currentH,daysSafe:daysSafe};
 }
 
 // ── Weather ───────────────────────────────────────────────────────────────────
@@ -363,7 +351,11 @@ function renderSidebar(){
     var b='<span class="badge pending">Pending</span>';
     if(f.status==='loading') b='<span class="badge pending">Analysing...</span>';
     else if(f.status==='error') b='<span class="badge veryhigh">Error</span>';
-    else if(f.result){var w=worstRisk(f.result.species);b='<span class="badge '+badgeClass(w)+'">'+w+'</span>';}
+    else if(f.result){
+      var maxH=0;
+      SPECIES.forEach(function(s){if(f.result.species[s.key].currentH>maxH)maxH=f.result.species[s.key].currentH;});
+      b='<span class="badge pending">'+Math.round(maxH).toLocaleString()+' L3h/ha</span>';
+    }
     return '<div class="fi'+(selId===f.id?' active':'')+'" data-id="'+f.id+'">'
       +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px"><h3>'+f.name+'</h3>'+b+'</div>'
       +'<p>'+f.ha+'ha · '+f.ewes+' ewes · '+f.lambs+' lambs · '+f.fec+' epg</p></div>';
@@ -510,7 +502,21 @@ function drawWeatherOnCanvas(canvas,weather,grazingEnd,forecastStart,W,H){
 function sizeCanvas(id,drawFn,H){
   var c=document.getElementById(id);if(!c)return;
   var W=c.parentElement.offsetWidth||560;
-  c.width=W;c.height=H;c.style.width=W+'px';c.style.height=H+'px';drawFn(c,W,H);
+  c.width=W;c.height=H;c.style.width=W+'px';c.style.height=H+'px';drawFn(c,W,H,null);
+}
+function attachParasiteHover(id,drawFn,H,spResults){
+  var c=document.getElementById(id);if(!c)return;
+  var W=c.width,pl=72,pr=16,cw=W-pl-pr;
+  var days0=SPECIES.reduce(function(best,sp){var d=spResults[sp.key].days;return d.length>best.length?d:best;},[]);
+  var n=days0.length;
+  function getIdx(ex){
+    var rect=c.getBoundingClientRect(),x=ex-rect.left;
+    var i=Math.round((x-pl)/cw*(n-1));
+    return Math.max(0,Math.min(n-1,i));
+  }
+  c.addEventListener('mousemove',function(e){drawFn(c,W,H,getIdx(e.clientX));});
+  c.addEventListener('mouseleave',function(){drawFn(c,W,H,null);});
+  c.style.cursor='crosshair';
 }
 
 function expandChart(drawFn,title){
@@ -554,13 +560,14 @@ function renderMain(){
   }
   var r=f.result,sp=r.species;
   var cards=SPECIES.map(function(s){
-    var sr=sp[s.key],rl=sr.riskLevel,pct=riskPct(rl);
-    return '<div class="rcard" style="background:'+RB[rl]+';border-color:'+RBD[rl]+'">'
-      +'<div class="spname" style="color:'+RT[rl]+'"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:'+s.color+';margin-right:5px;vertical-align:middle"></span>'+s.name+'</div>'
-      +'<div class="rl" style="color:'+RC[rl]+'">'+rl+'</div>'
-      +'<div class="idx" style="color:'+RT[rl]+'">L3h on herbage today: '+Math.round(sr.currentH).toLocaleString()+' /ha</div>'
-      +'<div class="rb"><div class="rbf" style="width:'+pct+'%;background:'+RC[rl]+'"></div></div>'
-      +'<div class="rec" style="color:'+RT[rl]+'">'+RECS[rl]+'</div></div>';
+    var sr=sp[s.key];
+    return '<div class="rcard" style="background:#f8f9fa;border-color:#dee2e6">'
+      +'<div class="spname" style="color:#6c757d"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:'+s.color+';margin-right:5px;vertical-align:middle"></span>'+s.name+'</div>'
+      +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">'
+      +'<div><div style="font-size:10px;color:#6c757d">L3h on herbage (today)</div><div style="font-size:18px;font-weight:700;color:#333">'+Math.round(sr.currentH).toLocaleString()+'<span style="font-size:11px;font-weight:400;color:#6c757d"> /ha</span></div></div>'
+      +'<div><div style="font-size:10px;color:#6c757d">Total L3p on pasture</div><div style="font-size:18px;font-weight:700;color:#333">'+Math.round(sr.current).toLocaleString()+'<span style="font-size:11px;font-weight:400;color:#6c757d"> /ha</span></div></div>'
+      +'<div><div style="font-size:10px;color:#6c757d">Peak L3p (season)</div><div style="font-size:18px;font-weight:700;color:#333">'+Math.round(sr.peak).toLocaleString()+'<span style="font-size:11px;font-weight:400;color:#6c757d"> /ha</span></div></div>'
+      +'</div></div>';
   }).join('');
   var leg=SPECIES.map(function(s){return '<span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:#6c757d;margin-right:14px"><span style="display:inline-block;width:22px;height:3px;border-radius:2px;background:'+s.color+'"></span>'+s.name+'</span>';}).join('');
   el.innerHTML='<div class="dh"><div><h2>'+f.name+'</h2>'
@@ -571,7 +578,21 @@ function renderMain(){
     +'<button id="btnDel" class="btn-red btn-sm">Delete</button>'
     +'</div></div>'
     +'<div class="cards3">'+cards+'</div>'
-    +'<div class="card"><h3>L3 on Herbage — '+f.start+' to +14 days</h3>'
+    +'<div class="card" style="margin-bottom:14px"><h3>Days Safe Grazing After Turnout</h3>'
+    +'<div style="display:grid;grid-template-columns:repeat('+SPECIES.length+',1fr);gap:14px;margin-top:8px">'
+    +SPECIES.map(function(s){
+      var ds=sp[s.key].daysSafe;
+      return '<div style="text-align:center;padding:10px;border-radius:8px;background:#f8f9fa;border:1px solid #dee2e6">'
+        +'<div style="font-size:11px;font-weight:600;color:#6c757d;margin-bottom:4px">'
+        +'<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+s.color+';margin-right:4px;vertical-align:middle"></span>'
+        +s.name+'</div>'
+        +(ds===null
+          ?'<div style="font-size:22px;font-weight:700;color:#333">—</div><div style="font-size:11px;color:#6c757d">No significant larval rise detected</div>'
+          :'<div style="font-size:32px;font-weight:700;color:#333">'+ds+'<span style="font-size:14px;font-weight:400;color:#6c757d"> days</span></div>'
+          +'<div style="font-size:11px;color:#6c757d">until L3 challenge begins</div>')
+        +'</div>';
+    }).join('')
+    +'</div></div>'
     +'<div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:10px;font-size:11px;color:#6c757d;align-items:center">'
     +SPECIES.map(function(s){return '<span style="display:inline-flex;align-items:center;gap:5px">'
       +'<span style="display:inline-block;width:22px;height:3px;border-radius:2px;background:'+s.color+'"></span>'
@@ -619,14 +640,17 @@ function renderMain(){
     saveFields();selId=null;renderSidebar();renderMain();
   });
   document.getElementById('cParWrap').addEventListener('click',function(){
-    expandChart(function(c,W,H){drawParasiteOnCanvas(c,sp,f.end,r.forecastStart,W,H);},f.name+' — L3 Larval Density');
+    expandChart(function(c,W,H){drawParasiteOnCanvas(c,sp,f.end,r.forecastStart,W,H,null);},f.name+' — L3 Larval Density');
   });
   document.getElementById('cWxWrap').addEventListener('click',function(){
     expandChart(function(c,W,H){drawWeatherOnCanvas(c,r.weather,f.end,r.forecastStart,W,H);},f.name+' — Weather');
   });
   setTimeout(function(){
-    sizeCanvas('cMain',function(c,W,H){drawParasiteOnCanvas(c,sp,f.end,r.forecastStart,W,H);},240);
-    sizeCanvas('cWeather',function(c,W,H){drawWeatherOnCanvas(c,r.weather,f.end,r.forecastStart,W,H);},200);
+    var parDraw=function(c,W,H,hi){drawParasiteOnCanvas(c,sp,f.end,r.forecastStart,W,H,hi);};
+    var wxDraw=function(c,W,H,hi){drawWeatherOnCanvas(c,r.weather,f.end,r.forecastStart,W,H);};
+    sizeCanvas('cMain',parDraw,240);
+    sizeCanvas('cWeather',wxDraw,200);
+    attachParasiteHover('cMain',parDraw,240,sp);
   },100);
 }
 

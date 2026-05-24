@@ -506,16 +506,23 @@ function sizeCanvas(id,drawFn,H){
 }
 function attachParasiteHover(id,drawFn,H,spResults){
   var c=document.getElementById(id);if(!c)return;
-  var W=c.width,pl=72,pr=16,cw=W-pl-pr;
+  var pl=72,pr=16;
   var days0=SPECIES.reduce(function(best,sp){var d=spResults[sp.key].days;return d.length>best.length?d:best;},[]);
   var n=days0.length;
   function getIdx(ex){
-    var rect=c.getBoundingClientRect(),x=ex-rect.left;
+    var W=c.width,cw=W-pl-pr;
+    var rect=c.getBoundingClientRect(),x=(ex-rect.left)*(c.width/rect.width);
     var i=Math.round((x-pl)/cw*(n-1));
     return Math.max(0,Math.min(n-1,i));
   }
-  c.addEventListener('mousemove',function(e){drawFn(c,W,H,getIdx(e.clientX));});
-  c.addEventListener('mouseleave',function(){drawFn(c,W,H,null);});
+  c.addEventListener('mousemove',function(e){
+    var W=c.width;
+    drawFn(c,W,H,getIdx(e.clientX));
+  });
+  c.addEventListener('mouseleave',function(){
+    var W=c.width;
+    drawFn(c,W,H,null);
+  });
   c.style.cursor='crosshair';
 }
 

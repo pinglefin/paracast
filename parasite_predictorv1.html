@@ -236,6 +236,7 @@ function runGloWormMulti(days,periods,ha,sp){
     });
   });
   var rainHistory=[],petHistory=[],E=0,L=0,L3f=0,L3p=0,out=[];
+  var SUBSTEPS=4; // sub-daily integration steps
   for(var i=0;i<days.length;i++){
     var d=days[i],dDate=d.date.slice(0,10);
     var T=d.temp!=null?d.temp:10,R=d.rain!=null?d.rain:0;
@@ -252,15 +253,19 @@ function runGloWormMulti(days,periods,ha,sp){
     }
     var C=(sp.peWindow>0&&peRatio<1)?sp.C:1.0;
     var m1=R>=2?sp.m1opt:(sp.peWindow>0&&peRatio>=1?sp.m1sub:sp.m1dry);
-    var Enew=(eggMap[dDate]||0)*C;
-    var dE=-(mu1+2*delta)*E+Enew;
-    var dL=-(mu2+2*delta)*L+2*delta*E;
-    var dL3f=-(mu3+m1)*L3f+2*delta*L;
-    var dL3p=-(mu4*(1-m2)+mu5*m2)*L3p+m1*L3f;
-    E=Math.max(0,E+dE);
-    L=Math.max(0,L+dL);
-    L3f=Math.max(0,L3f+dL3f);
-    L3p=Math.max(0,L3p+dL3p);
+    var dailyEggs=(eggMap[dDate]||0)*C;
+    var dt=1/SUBSTEPS;
+    for(var s=0;s<SUBSTEPS;s++){
+      var Enew=dailyEggs/SUBSTEPS;
+      var dE=(-(mu1+2*delta)*E+Enew)*dt;
+      var dL=(-(mu2+2*delta)*L+2*delta*E)*dt;
+      var dL3f=(-(mu3+m1)*L3f+2*delta*L)*dt;
+      var dL3p=(-(mu4*(1-m2)+mu5*m2)*L3p+m1*L3f)*dt;
+      E=Math.max(0,E+dE);
+      L=Math.max(0,L+dL);
+      L3f=Math.max(0,L3f+dL3f);
+      L3p=Math.max(0,L3p+dL3p);
+    }
     out.push({date:dDate,larval:L3p,larvalH:L3p*m2});
   }
   var peak=0;for(var i=0;i<out.length;i++)if(out[i].larval>peak)peak=out[i].larval;

@@ -168,6 +168,7 @@ input:focus,select:focus{border-color:#1a6b3c}
 var LAT=51.012511,LON=0.689743;
 var TODAY=new Date().toISOString().slice(0,10);
 var APIKEY='f8e775420bmsh90cb930357b69c9p134236jsn4ccbf97bd995';
+var KG_DM_HA=2000; // fixed herbage biomass kg DM/ha
 
 // Data model
 // fields: [{id, name, ha, periods:[{id,mobId,start,end,status,result,error}]}]
@@ -495,7 +496,10 @@ document.getElementById('btnFecSave').addEventListener('click',function(){
 // ── Charts ────────────────────────────────────────────────────────────────────
 function getMax(spResults){
   var mx=0;
-  SPECIES.forEach(function(sp){spResults[sp.key].days.forEach(function(d){if(d.larvalH>mx)mx=d.larvalH;if(d.larval>mx)mx=d.larval;});});
+  SPECIES.forEach(function(sp){spResults[sp.key].days.forEach(function(d){
+    if(d.larvalHkg>mx)mx=d.larvalHkg;
+    if(d.larval/KG_DM_HA>mx)mx=d.larval/KG_DM_HA;
+  });});
   return mx||1;
 }
 function getDays0(spResults){
@@ -519,7 +523,7 @@ function drawParasiteOnCanvas(canvas,spResults,periods,forecastStart,W,H){
 
   // Axes
   ctx.save();ctx.font='10px system-ui';ctx.fillStyle='#999';ctx.textAlign='center';
-  ctx.translate(11,pt+ch/2);ctx.rotate(-Math.PI/2);ctx.fillText('L3 larvae / ha',0,0);ctx.restore();
+  ctx.translate(11,pt+ch/2);ctx.rotate(-Math.PI/2);ctx.fillText('L3 / kg DM',0,0);ctx.restore();
   ctx.font='10px system-ui';ctx.textAlign='right';
   [0,0.25,0.5,0.75,1].forEach(function(frac){
     var gy=pt+ch-frac*ch;
@@ -552,18 +556,18 @@ function drawParasiteOnCanvas(canvas,spResults,periods,forecastStart,W,H){
     var spDays=spResults[sp.key].days,spN=spDays.length,fIdx=spN;
     if(forecastStart){for(var i=0;i<spN;i++){if(spDays[i].date>=forecastStart){fIdx=i;break;}}}
     ctx.strokeStyle=sp.color;ctx.lineWidth=2;ctx.lineJoin='round';ctx.setLineDash([]);ctx.beginPath();
-    for(var i=0;i<Math.min(fIdx+1,spN);i++){var px=iX(i),py=pt+ch-(spDays[i].larvalH/mx)*ch;if(i===0)ctx.moveTo(px,py);else ctx.lineTo(px,py);}
+    for(var i=0;i<Math.min(fIdx+1,spN);i++){var px=iX(i),py=pt+ch-(spDays[i].larvalHkg/mx)*ch;if(i===0)ctx.moveTo(px,py);else ctx.lineTo(px,py);}
     ctx.stroke();
     if(fIdx<spN){
       ctx.setLineDash([6,4]);ctx.beginPath();
-      for(var i=Math.max(0,fIdx-1);i<spN;i++){var px=iX(i),py=pt+ch-(spDays[i].larvalH/mx)*ch;if(i===Math.max(0,fIdx-1))ctx.moveTo(px,py);else ctx.lineTo(px,py);}
+      for(var i=Math.max(0,fIdx-1);i<spN;i++){var px=iX(i),py=pt+ch-(spDays[i].larvalHkg/mx)*ch;if(i===Math.max(0,fIdx-1))ctx.moveTo(px,py);else ctx.lineTo(px,py);}
       ctx.stroke();ctx.setLineDash([]);
     }
     ctx.strokeStyle=sp.color;ctx.lineWidth=1;ctx.globalAlpha=0.3;ctx.setLineDash([2,3]);ctx.beginPath();
-    for(var i=0;i<spN;i++){var px=iX(i),py=pt+ch-(spDays[i].larval/mx)*ch;if(i===0)ctx.moveTo(px,py);else ctx.lineTo(px,py);}
+    for(var i=0;i<spN;i++){var px=iX(i),py=pt+ch-((spDays[i].larval/KG_DM_HA)/mx)*ch;if(i===0)ctx.moveTo(px,py);else ctx.lineTo(px,py);}
     ctx.stroke();ctx.globalAlpha=1.0;ctx.setLineDash([]);
     for(var i=0;i<spN;i++){
-      var px=iX(i),py=pt+ch-(spDays[i].larvalH/mx)*ch;
+      var px=iX(i),py=pt+ch-(spDays[i].larvalHkg/mx)*ch;
       ctx.beginPath();ctx.arc(px,py,3,0,Math.PI*2);ctx.fillStyle='#fff';ctx.fill();
       ctx.strokeStyle=sp.color;ctx.lineWidth=1.5;ctx.stroke();
     }
@@ -640,15 +644,15 @@ function attachHover(canvasId,spResults){
     var closestSp=null,closestDist=Infinity;
     SPECIES.forEach(function(sp){
       var sd=spResults[sp.key].days[idx];if(!sd)return;
-      var dist=Math.abs(cssY-(pt+ch-(sd.larvalH/mx)*ch));
+      var dist=Math.abs(cssY-(pt+ch-(sd.larvalHkg/mx)*ch));
       if(dist<closestDist){closestDist=dist;closestSp=sp;}
     });
     if(!closestSp||closestDist>50){tip.style.display='none';return;}
     var sd=spResults[closestSp.key].days[idx];
     tip.innerHTML='<strong>'+days0[idx].date+'</strong>'
       +'<br><span style="color:'+closestSp.color+'">●</span> '+closestSp.name
-      +'<br>&nbsp;&nbsp;L3h: <strong>'+Math.round(sd.larvalH).toLocaleString()+'</strong> /ha'
-      +'<br>&nbsp;&nbsp;L3p: <strong>'+Math.round(sd.larval).toLocaleString()+'</strong> /ha';
+      +'<br>&nbsp;&nbsp;L3h: <strong>'+sd.larvalHkg.toFixed(2)+'</strong> /kg DM'
+      +'<br>&nbsp;&nbsp;L3p: <strong>'+(sd.larval/KG_DM_HA).toFixed(2)+'</strong> /kg DM';
     var tx=e.clientX+16,ty=e.clientY-10;
     if(tx+230>window.innerWidth)tx=e.clientX-240;
     tip.style.left=tx+'px';tip.style.top=ty+'px';tip.style.display='block';
@@ -724,7 +728,31 @@ function renderFields(el){
     }).join('')+'</div>';
   }
 
-  // Chart
+  // Days to significant challenge — first day L3p exceeds 1000/ha
+  var challengeHtml='';
+  if(hasResults){
+    var challengeCards=SPECIES.map(function(s){
+      var days=f.spResults[s.key].days;
+      var hitDay=null,hitDate=null;
+      for(var j=0;j<days.length;j++){
+        if(days[j].larvalHkg>0.5){hitDay=j;hitDate=days[j].date;break;}
+      }
+      return '<div style="text-align:center;padding:12px;border-radius:8px;background:#f8f9fa;border:1px solid #dee2e6">'
+        +'<div style="font-size:11px;font-weight:600;color:#6c757d;margin-bottom:6px">'
+        +'<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+s.color+';margin-right:4px;vertical-align:middle"></span>'+s.name+'</div>'
+        +(hitDay===null
+          ?'<div style="font-size:22px;font-weight:700;color:#27ae60">Never</div><div style="font-size:11px;color:#6c757d">L3p stays below 1,000 /ha</div>'
+          :'<div style="font-size:28px;font-weight:700;color:#333">Day '+hitDay+'</div>'
+          +'<div style="font-size:12px;color:#6c757d;margin-top:2px">'+hitDate+'</div>'
+          +'<div style="font-size:11px;color:#e67e22;margin-top:4px">L3p exceeds 1,000 /ha</div>')
+        +'</div>';
+    }).join('');
+    challengeHtml='<div class="card" style="margin-bottom:14px">'
+      +'<h3>Significant Larval Challenge</h3>'
+      +'<p style="font-size:11px;color:#6c757d;margin:4px 0 12px">Day L3p first exceeds 1,000 /ha from grazing start.</p>'
+      +'<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:14px">'+challengeCards+'</div>'
+      +'</div>';
+  }
   var chartHtml='';
   if(hasResults){
     var leg=SPECIES.map(function(s){return '<span style="display:inline-flex;align-items:center;gap:5px"><span style="display:inline-block;width:22px;height:3px;border-radius:2px;background:'+s.color+'"></span>'+s.name+' L3h</span>';}).join('');
@@ -761,6 +789,7 @@ function renderFields(el){
     +'</div></div>'
     +(loadingPeriods.length?'<div style="display:flex;align-items:center;gap:10px;padding:12px;background:#fff3cd;border-radius:8px;margin-bottom:14px;font-size:13px"><div class="spinner" style="width:20px;height:20px;margin:0"></div>Analysing '+loadingPeriods.length+' period(s)...</div>':'')
     +cardsHtml
+    +challengeHtml
     +'<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><h3 style="margin:0">Grazing Periods</h3>'
     +'<button id="btnAddPeriod" class="btn-green btn-sm">+ Add Grazing Period</button></div>'
     +periodsHtml+'</div>'

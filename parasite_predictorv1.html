@@ -238,12 +238,6 @@ function runGloWormMulti(days,periods,ha,sp){
   });
   var rainHistory=[],petHistory=[];
   var E=0,L=0,L3f=0,L3p=0,out=[];
-  var DT=0.1;
-  // Egg queue: each entry {eggs, accumulated_delta}
-  // Eggs only enter ODE system once accumulated_delta >= minDeltaThreshold
-  // This enforces the biological minimum development time
-  var eggQueue=[];
-  var MIN_DELTA_THRESHOLD=0.5; // must accumulate 0.5 delta units before entering system
 
   for(var i=0;i<days.length;i++){
     var d=days[i],dDate=d.date.slice(0,10);
@@ -261,44 +255,15 @@ function runGloWormMulti(days,periods,ha,sp){
     }
     var C=(sp.peWindow>0&&peRatio<1)?sp.C:1.0;
     var m1=R>=2?sp.m1opt:(sp.peWindow>0&&peRatio>=1?sp.m1sub:sp.m1dry);
-
-    // Add today's eggs to queue
-    var todayEggs=(eggMap[dDate]||0)*C;
-    if(todayEggs>0) eggQueue.push({eggs:todayEggs,accDelta:0});
-
-    // Advance queue: accumulate delta for all queued egg batches
-    var releasedEggs=0;
-    var remaining=[];
-    for(var q=0;q<eggQueue.length;q++){
-      eggQueue[q].accDelta+=peRatio>=1?delta:delta*sp.C;
-      if(eggQueue[q].accDelta>=MIN_DELTA_THRESHOLD){
-        releasedEggs+=eggQueue[q].eggs;
-      } else {
-        remaining.push(eggQueue[q]);
-      }
-    }
-    eggQueue=remaining;
-
-    // RK4 integration — only released eggs enter the ODE
-    function deriv(e,l,l3f,l3p,eggRate){
-      var de=-(mu1+2*delta)*e+eggRate;
-      var dl=-(mu2+2*delta)*l+2*delta*e;
-      var dl3f=-(mu3+m1)*l3f+2*delta*l;
-      var dl3p=-(mu4*(1-m2)+mu5*m2)*l3p+m1*l3f;
-      return [de,dl,dl3f,dl3p];
-    }
-    var steps=Math.round(1/DT);
-    var eggRate=releasedEggs; // released eggs enter ODE today
-    for(var s=0;s<steps;s++){
-      var k1=deriv(E,L,L3f,L3p,eggRate);
-      var k2=deriv(E+DT/2*k1[0],L+DT/2*k1[1],L3f+DT/2*k1[2],L3p+DT/2*k1[3],eggRate);
-      var k3=deriv(E+DT/2*k2[0],L+DT/2*k2[1],L3f+DT/2*k2[2],L3p+DT/2*k2[3],eggRate);
-      var k4=deriv(E+DT*k3[0],L+DT*k3[1],L3f+DT*k3[2],L3p+DT*k3[3],eggRate);
-      E=Math.max(0,E+DT/6*(k1[0]+2*k2[0]+2*k3[0]+k4[0]));
-      L=Math.max(0,L+DT/6*(k1[1]+2*k2[1]+2*k3[1]+k4[1]));
-      L3f=Math.max(0,L3f+DT/6*(k1[2]+2*k2[2]+2*k3[2]+k4[2]));
-      L3p=Math.max(0,L3p+DT/6*(k1[3]+2*k2[3]+2*k3[3]+k4[3]));
-    }
+    var Enew=(eggMap[dDate]||0)*C;
+    var dE=-(mu1+2*delta)*E+Enew;
+    var dL=-(mu2+2*delta)*L+2*delta*E;
+    var dL3f=-(mu3+m1)*L3f+2*delta*L;
+    var dL3p=-(mu4*(1-m2)+mu5*m2)*L3p+m1*L3f;
+    E=Math.max(0,E+dE);
+    L=Math.max(0,L+dL);
+    L3f=Math.max(0,L3f+dL3f);
+    L3p=Math.max(0,L3p+dL3p);
     var L3h=L3p*m2;
     out.push({date:dDate,larval:L3p>0.01?L3p:0,larvalH:L3h>0.01?L3h:0});
   }

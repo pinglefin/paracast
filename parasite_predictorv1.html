@@ -213,14 +213,15 @@ function petMM(T){if(T<=0)return 0.1;return Math.max(0.1,0.0023*(T+17.8)*Math.sq
 // Get most recent FEC for a mob on or before a given date
 function getMobFec(mob,date){
   if(!mob||!mob.fecs||!mob.fecs.length)return 0;
-  var sorted=mob.fecs.slice().sort(function(a,b){return a.date>b.date?-1:1;});
-  for(var i=0;i<sorted.length;i++){if(sorted[i].date<=date)return sorted[i].epg;}
-  return sorted[sorted.length-1].epg;
+  var sorted=mob.fecs.filter(function(f){return f.date<=date;}).sort(function(a,b){return a.date>b.date?-1:1;});
+  if(sorted.length)return sorted[0].epg;
+  // fallback to earliest FEC if none before start date
+  return mob.fecs.slice().sort(function(a,b){return a.date>b.date?1:-1;})[0].epg;
 }
 
 // Run GloWorm across all grazing periods for a field
 function runGloWormMulti(days,periods,ha,sp){
-  // Build a map of date -> daily eggs
+  // Build egg map
   var eggMap={};
   periods.forEach(function(p){
     if(p.status!=='done'&&p.status!=='loading')return;
@@ -235,8 +236,9 @@ function runGloWormMulti(days,periods,ha,sp){
       }
     });
   });
-  var rainHistory=[],petHistory=[],E=0,L=0,L3f=0,L3p=0,out=[];
-  var SUBSTEPS=4; // sub-daily integration steps
+  var rainHistory=[],petHistory=[];
+  var E=0,L=0,L3f=0,L3p=0,out=[];
+  var DT=0.1; // 10 sub-steps per day (RK4)
   for(var i=0;i<days.length;i++){
     var d=days[i],dDate=d.date.slice(0,10);
     var T=d.temp!=null?d.temp:10,R=d.rain!=null?d.rain:0;
@@ -254,19 +256,29 @@ function runGloWormMulti(days,periods,ha,sp){
     var C=(sp.peWindow>0&&peRatio<1)?sp.C:1.0;
     var m1=R>=2?sp.m1opt:(sp.peWindow>0&&peRatio>=1?sp.m1sub:sp.m1dry);
     var dailyEggs=(eggMap[dDate]||0)*C;
-    var dt=1/SUBSTEPS;
-    for(var s=0;s<SUBSTEPS;s++){
-      var Enew=dailyEggs/SUBSTEPS;
-      var dE=(-(mu1+2*delta)*E+Enew)*dt;
-      var dL=(-(mu2+2*delta)*L+2*delta*E)*dt;
-      var dL3f=(-(mu3+m1)*L3f+2*delta*L)*dt;
-      var dL3p=(-(mu4*(1-m2)+mu5*m2)*L3p+m1*L3f)*dt;
-      E=Math.max(0,E+dE);
-      L=Math.max(0,L+dL);
-      L3f=Math.max(0,L3f+dL3f);
-      L3p=Math.max(0,L3p+dL3p);
+
+    // RK4 integration with DT substeps
+    function deriv(e,l,l3f,l3p,eggRate){
+      var de=-(mu1+2*delta)*e+eggRate;
+      var dl=-(mu2+2*delta)*l+2*delta*e;
+      var dl3f=-(mu3+m1)*l3f+2*delta*l;
+      var dl3p=-(mu4*(1-m2)+mu5*m2)*l3p+m1*l3f;
+      return [de,dl,dl3f,dl3p];
     }
-    out.push({date:dDate,larval:L3p,larvalH:L3p*m2});
+    var eggRate=dailyEggs; // eggs per day, spread across substeps
+    var steps=Math.round(1/DT);
+    for(var s=0;s<steps;s++){
+      var k1=deriv(E,L,L3f,L3p,eggRate);
+      var k2=deriv(E+DT/2*k1[0],L+DT/2*k1[1],L3f+DT/2*k1[2],L3p+DT/2*k1[3],eggRate);
+      var k3=deriv(E+DT/2*k2[0],L+DT/2*k2[1],L3f+DT/2*k2[2],L3p+DT/2*k2[3],eggRate);
+      var k4=deriv(E+DT*k3[0],L+DT*k3[1],L3f+DT*k3[2],L3p+DT*k3[3],eggRate);
+      E=Math.max(0,E+DT/6*(k1[0]+2*k2[0]+2*k3[0]+k4[0]));
+      L=Math.max(0,L+DT/6*(k1[1]+2*k2[1]+2*k3[1]+k4[1]));
+      L3f=Math.max(0,L3f+DT/6*(k1[2]+2*k2[2]+2*k3[2]+k4[2]));
+      L3p=Math.max(0,L3p+DT/6*(k1[3]+2*k2[3]+2*k3[3]+k4[3]));
+    }
+    var L3h=L3p*m2;
+    out.push({date:dDate,larval:L3p>0.01?L3p:0,larvalH:L3h>0.01?L3h:0});
   }
   var peak=0;for(var i=0;i<out.length;i++)if(out[i].larval>peak)peak=out[i].larval;
   var current=out.length?out[out.length-1].larval:0;
@@ -399,12 +411,25 @@ document.getElementById('btnPeriodSave').addEventListener('click',async function
     var weather=await getWeather(start);
     var allDays=weather.historical.concat(weather.forecast);
     if(weather.historical.length&&weather.forecast.length){
-      var lastH=new Date(weather.historical[weather.historical.length-1].date);
-      var firstF=new Date(weather.forecast[0].date);
-      var gap=[],gd=new Date(lastH);gd.setDate(gd.getDate()+1);
-      while(gd<firstF){gap.push({date:gd.toISOString().slice(0,10),temp:10,rain:0,solar:10,forecast:false});gd.setDate(gd.getDate()+1);}
+      var lastHistDate=weather.historical[weather.historical.length-1].date.slice(0,10);
+      var firstFcastDate=weather.forecast[0].date.slice(0,10);
+      var gap=[];
+      var gd=new Date(lastHistDate);gd.setDate(gd.getDate()+1);
+      while(gd.toISOString().slice(0,10)<firstFcastDate){
+        gap.push({date:gd.toISOString().slice(0,10),temp:10,rain:0,solar:10,forecast:false});
+        gd.setDate(gd.getDate()+1);
+      }
       allDays=weather.historical.concat(gap,weather.forecast);
     }
+    // Deduplicate by date, keeping last occurrence
+    var seen={},dedupedDays=[];
+    allDays.forEach(function(d){seen[d.date.slice(0,10)]=d;});
+    // Rebuild in order
+    allDays.forEach(function(d){
+      var key=d.date.slice(0,10);
+      if(seen[key]===d)dedupedDays.push(d);
+    });
+    allDays=dedupedDays;
     // Run model across ALL periods for this field
     var updatedField=fields.find(function(f){return f.id===editingPeriodFieldId||f.id===field.id;});
     // mark this period done, store weather on field

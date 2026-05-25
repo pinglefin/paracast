@@ -395,8 +395,11 @@ document.getElementById('btnPeriodSave').addEventListener('click',async function
   document.getElementById('periodOverlay').style.display='none';
   persist();renderMain();
   // Run analysis
+  // Find earliest start date across all periods
+  var earliestStart=period.start;
+  field.periods.forEach(function(p){if(p.start<earliestStart)earliestStart=p.start;});
   try{
-    var weather=await getWeather(start);
+    var weather=await getWeather(earliestStart);
     var allDays=weather.historical.concat(weather.forecast);
     if(weather.historical.length&&weather.forecast.length){
       var lastHistDate=weather.historical[weather.historical.length-1].date.slice(0,10);
@@ -419,9 +422,9 @@ document.getElementById('btnPeriodSave').addEventListener('click',async function
     });
     allDays=dedupedDays;
     // Run model across ALL periods for this field
-    var updatedField=fields.find(function(f){return f.id===editingPeriodFieldId||f.id===field.id;});
-    // mark this period done, store weather on field
+    var updatedField=fields.find(function(f){return f.id===editingPeriodFieldId;});
     updatedField.periods=updatedField.periods.map(function(p){return p.id===pid?Object.assign({},p,{status:'done'}):p;});
+    // Run model across ALL periods using full weather range
     var spResults={};
     SPECIES.forEach(function(sp){spResults[sp.key]=runGloWormMulti(allDays,updatedField.periods,updatedField.ha,sp);});
     var h=weather.historical;
@@ -751,7 +754,7 @@ function renderFields(el){
           ?'<div style="font-size:22px;font-weight:700;color:#27ae60">Never</div><div style="font-size:11px;color:#6c757d">L3p stays below 1,000 /ha</div>'
           :'<div style="font-size:28px;font-weight:700;color:#333">Day '+hitDay+'</div>'
           +'<div style="font-size:12px;color:#6c757d;margin-top:2px">'+hitDate+'</div>'
-          +'<div style="font-size:11px;color:#e67e22;margin-top:4px">L3p exceeds 1,000 /ha</div>')
+          +'<div style="font-size:11px;color:#e67e22;margin-top:4px">L3h first detected on herbage</div>')
         +'</div>';
     }).join('');
     challengeHtml='<div class="card" style="margin-bottom:14px">'
@@ -796,7 +799,7 @@ function renderFields(el){
     +'</div></div>'
     +(loadingPeriods.length?'<div style="display:flex;align-items:center;gap:10px;padding:12px;background:#fff3cd;border-radius:8px;margin-bottom:14px;font-size:13px"><div class="spinner" style="width:20px;height:20px;margin:0"></div>Analysing '+loadingPeriods.length+' period(s)...</div>':'')
     +cardsHtml
-    +challengeHtml
+    +(todayDays.length?challengeHtml:'')
     +'<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><h3 style="margin:0">Grazing Periods</h3>'
     +'<button id="btnAddPeriod" class="btn-green btn-sm">+ Add Grazing Period</button></div>'
     +periodsHtml+'</div>'

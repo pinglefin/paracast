@@ -703,6 +703,7 @@ function renderFields(el){
   var donePeriods=f.periods.filter(function(p){return p.status==='done';});
   var hasResults=f.spResults&&donePeriods.length>0;
   var loadingPeriods=f.periods.filter(function(p){return p.status==='loading';});
+  var todayDays=f.weather?f.weather.filter(function(d){return d.date.slice(0,10)>=TODAY;}):[];
 
   // Period list HTML
   var periodsHtml=f.periods.length?f.periods.map(function(p,pi){

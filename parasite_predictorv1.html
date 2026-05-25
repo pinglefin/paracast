@@ -497,8 +497,8 @@ document.getElementById('btnFecSave').addEventListener('click',function(){
 function getMax(spResults){
   var mx=0;
   SPECIES.forEach(function(sp){spResults[sp.key].days.forEach(function(d){
-    if(d.larvalHkg>mx)mx=d.larvalHkg;
-    if(d.larval/KG_DM_HA>mx)mx=d.larval/KG_DM_HA;
+    var hkg=d.larvalHkg!=null?d.larvalHkg:(d.larvalH!=null?d.larvalH/KG_DM_HA:0);
+    if(hkg>mx)mx=hkg;
   });});
   return mx||1;
 }
@@ -556,18 +556,20 @@ function drawParasiteOnCanvas(canvas,spResults,periods,forecastStart,W,H){
     var spDays=spResults[sp.key].days,spN=spDays.length,fIdx=spN;
     if(forecastStart){for(var i=0;i<spN;i++){if(spDays[i].date>=forecastStart){fIdx=i;break;}}}
     ctx.strokeStyle=sp.color;ctx.lineWidth=2;ctx.lineJoin='round';ctx.setLineDash([]);ctx.beginPath();
-    for(var i=0;i<Math.min(fIdx+1,spN);i++){var px=iX(i),py=pt+ch-(spDays[i].larvalHkg/mx)*ch;if(i===0)ctx.moveTo(px,py);else ctx.lineTo(px,py);}
+    for(var i=0;i<Math.min(fIdx+1,spN);i++){
+      var hkg=spDays[i].larvalHkg!=null?spDays[i].larvalHkg:spDays[i].larvalH/KG_DM_HA;
+      var px=iX(i),py=pt+ch-(hkg/mx)*ch;if(i===0)ctx.moveTo(px,py);else ctx.lineTo(px,py);}
     ctx.stroke();
     if(fIdx<spN){
       ctx.setLineDash([6,4]);ctx.beginPath();
-      for(var i=Math.max(0,fIdx-1);i<spN;i++){var px=iX(i),py=pt+ch-(spDays[i].larvalHkg/mx)*ch;if(i===Math.max(0,fIdx-1))ctx.moveTo(px,py);else ctx.lineTo(px,py);}
+      for(var i=Math.max(0,fIdx-1);i<spN;i++){
+        var hkg=spDays[i].larvalHkg!=null?spDays[i].larvalHkg:spDays[i].larvalH/KG_DM_HA;
+        var px=iX(i),py=pt+ch-(hkg/mx)*ch;if(i===Math.max(0,fIdx-1))ctx.moveTo(px,py);else ctx.lineTo(px,py);}
       ctx.stroke();ctx.setLineDash([]);
     }
-    ctx.strokeStyle=sp.color;ctx.lineWidth=1;ctx.globalAlpha=0.3;ctx.setLineDash([2,3]);ctx.beginPath();
-    for(var i=0;i<spN;i++){var px=iX(i),py=pt+ch-((spDays[i].larval/KG_DM_HA)/mx)*ch;if(i===0)ctx.moveTo(px,py);else ctx.lineTo(px,py);}
-    ctx.stroke();ctx.globalAlpha=1.0;ctx.setLineDash([]);
     for(var i=0;i<spN;i++){
-      var px=iX(i),py=pt+ch-(spDays[i].larvalHkg/mx)*ch;
+      var hkg=spDays[i].larvalHkg!=null?spDays[i].larvalHkg:spDays[i].larvalH/KG_DM_HA;
+      var px=iX(i),py=pt+ch-(hkg/mx)*ch;
       ctx.beginPath();ctx.arc(px,py,3,0,Math.PI*2);ctx.fillStyle='#fff';ctx.fill();
       ctx.strokeStyle=sp.color;ctx.lineWidth=1.5;ctx.stroke();
     }
@@ -633,9 +635,11 @@ function attachHover(canvasId,spResults){
   var c=document.getElementById(canvasId);if(!c)return;
   var days0=getDays0(spResults),n=days0.length;if(!n)return;
   var tip=document.getElementById('chartTip');
+  var pl=72,pr=16,pt=18,pb=34;
+
   c.addEventListener('mousemove',function(e){
     var rect=c.getBoundingClientRect();
-    var pl=72,pr=16,pt=18,pb=34,cw=rect.width-pl-pr,ch=rect.height-pt-pb;
+    var cw=rect.width-pl-pr,ch=rect.height-pt-pb;
     var cssX=e.clientX-rect.left,cssY=e.clientY-rect.top;
     if(cssX<pl||cssX>rect.width-pr||cssY<pt||cssY>pt+ch){tip.style.display='none';return;}
     var idx=Math.round((cssX-pl)/cw*(n-1));
@@ -644,18 +648,21 @@ function attachHover(canvasId,spResults){
     var closestSp=null,closestDist=Infinity;
     SPECIES.forEach(function(sp){
       var sd=spResults[sp.key].days[idx];if(!sd)return;
-      var dist=Math.abs(cssY-(pt+ch-(sd.larvalHkg/mx)*ch));
+      var hkg=sd.larvalHkg!=null?sd.larvalHkg:(sd.larvalH!=null?sd.larvalH/KG_DM_HA:0);
+      var lineY=pt+ch-(hkg/mx)*ch;
+      var dist=Math.abs(cssY-lineY);
       if(dist<closestDist){closestDist=dist;closestSp=sp;}
     });
-    if(!closestSp||closestDist>50){tip.style.display='none';return;}
+    if(!closestSp){tip.style.display='none';return;}
     var sd=spResults[closestSp.key].days[idx];
+    var hkg=sd.larvalHkg!=null?sd.larvalHkg:(sd.larvalH!=null?sd.larvalH/KG_DM_HA:0);
     tip.innerHTML='<strong>'+days0[idx].date+'</strong>'
       +'<br><span style="color:'+closestSp.color+'">●</span> '+closestSp.name
-      +'<br>&nbsp;&nbsp;L3h: <strong>'+sd.larvalHkg.toFixed(2)+'</strong> /kg DM'
-      +'<br>&nbsp;&nbsp;L3p: <strong>'+(sd.larval/KG_DM_HA).toFixed(2)+'</strong> /kg DM';
+      +'<br>&nbsp;&nbsp;L3h: <strong>'+hkg.toFixed(2)+'</strong> /kg DM';
     var tx=e.clientX+16,ty=e.clientY-10;
-    if(tx+230>window.innerWidth)tx=e.clientX-240;
-    tip.style.left=tx+'px';tip.style.top=ty+'px';tip.style.display='block';
+    if(tx+200>window.innerWidth)tx=e.clientX-210;
+    tip.style.left=tx+'px';tip.style.top=ty+'px';
+    tip.style.display='block';
   });
   c.addEventListener('mouseleave',function(){tip.style.display='none';});
 }
@@ -755,7 +762,7 @@ function renderFields(el){
   }
   var chartHtml='';
   if(hasResults){
-    var leg=SPECIES.map(function(s){return '<span style="display:inline-flex;align-items:center;gap:5px"><span style="display:inline-block;width:22px;height:3px;border-radius:2px;background:'+s.color+'"></span>'+s.name+' L3h</span>';}).join('');
+    var leg=SPECIES.map(function(s){return '<span style="display:inline-flex;align-items:center;gap:5px"><span style="display:inline-block;width:22px;height:3px;border-radius:2px;background:'+s.color+'"></span>'+s.name+' L3h/kg DM</span>';}).join('');
     var bandLeg=donePeriods.map(function(p,pi){
       var mob=mobs.find(function(m){return m.id===p.mobId;})||{name:'?'};
       return '<span style="display:inline-flex;align-items:center;gap:5px"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:'+PERIOD_COLORS[pi%PERIOD_COLORS.length].replace('0.18','0.5').replace('0.15','0.5').replace('0.12','0.5')+'"></span>'+mob.name+' ('+p.start+' – '+p.end+')</span>';}).join('');

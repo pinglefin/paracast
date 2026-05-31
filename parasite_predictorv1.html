@@ -56,7 +56,6 @@ input:focus,select:focus{border-color:#1a6b3c}
 .row-item{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border:1px solid #dee2e6;border-radius:8px;margin-bottom:8px;background:#fff}
 .row-item h4{font-size:13px;font-weight:600}
 .row-item p{font-size:11px;color:#6c757d;margin-top:2px}
-.period-band{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:middle}
 .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
 .stat{background:#fff;border:1px solid #dee2e6;border-radius:8px;padding:12px}
 .stat .lbl{font-size:11px;color:#6c757d;margin-bottom:3px}
@@ -168,16 +167,13 @@ input:focus,select:focus{border-color:#1a6b3c}
 var LAT=51.012511,LON=0.689743;
 var TODAY=new Date().toISOString().slice(0,10);
 var APIKEY='f8e775420bmsh90cb930357b69c9p134236jsn4ccbf97bd995';
-var KG_DM_HA=2000; // fixed herbage biomass kg DM/ha
+var KG_DM_HA=2000;
+var L3H_MIN=0.001; // minimum meaningful L3h/kg DM
 
-// Data model
-// fields: [{id, name, ha, periods:[{id,mobId,start,end,status,result,error}]}]
-// mobs:   [{id, name, ewes, lambs, fecs:[{id,epg,date}]}]
 var fields=[],mobs=[];
 var selFieldId=null,activeTab='fields';
 var editingFieldId=null,editingMobId=null,editingPeriodId=null,editingPeriodFieldId=null,fecTargetMobId=null;
 
-// Period colours for chart bands
 var PERIOD_COLORS=['rgba(255,193,7,0.18)','rgba(52,152,219,0.15)','rgba(46,204,113,0.15)','rgba(231,76,60,0.12)','rgba(155,89,182,0.15)'];
 
 // ── Storage ───────────────────────────────────────────────────────────────────
@@ -193,9 +189,7 @@ function loadData(){
     var m=localStorage.getItem('paracast_mobs');
     fields=f?JSON.parse(f):[];
     mobs=m?JSON.parse(m):[];
-    // ensure periods array exists
     fields.forEach(function(f){if(!f.periods)f.periods=[];});
-    // mark any loading periods as errored
     fields.forEach(function(f){
       f.periods.forEach(function(p){if(p.status==='loading'){p.status='error';p.error='Session ended. Please re-run.';}});
     });
@@ -207,22 +201,19 @@ var SPECIES=[
   {key:'hc',name:'H. contortus',   color:'#e74c3c',devA:-0.09746,devB:0.01063,mu12c:[-1.47135,-0.11444,0.00327],mu3c:[-2.63080,-0.14407,0.00463],mu4c:[-3.68423,-0.25346,0.00740],mu3fromMu4:false,peWindow:4,C:0.1,m1opt:0.25,m1sub:0.051,m1dry:0.0},
   {key:'tc',name:'T. circumcincta',color:'#2980b9',devA:-0.02085,devB:0.00467,mu12c:[-1.62026,-0.17771,0.00629],mu4c:[-4.58817,-0.13996,0.00461],mu3fromMu4:true, peWindow:7,C:0.1,m1opt:0.21,m1sub:0.025,m1dry:0.0}
 ];
+
 function polyMu(c,T){var v=c[0]+c[1]*T+c[2]*T*T;return Math.min(1,Math.max(0,Math.exp(v)));}
 function calcM2(T){return Math.min(1,Math.max(0,Math.exp(-5.48240+0.45392*T-0.01252*T*T)));}
 function petMM(T){if(T<=0)return 0.1;return Math.max(0.1,0.0023*(T+17.8)*Math.sqrt(T)*0.408);}
 
-// Get most recent FEC for a mob on or before a given date
 function getMobFec(mob,date){
   if(!mob||!mob.fecs||!mob.fecs.length)return 0;
   var sorted=mob.fecs.filter(function(f){return f.date<=date;}).sort(function(a,b){return a.date>b.date?-1:1;});
   if(sorted.length)return sorted[0].epg;
-  // fallback to earliest FEC if none before start date
   return mob.fecs.slice().sort(function(a,b){return a.date>b.date?1:-1;})[0].epg;
 }
 
-// Run GloWorm across all grazing periods for a field
 function runGloWormMulti(days,periods,ha,sp){
-  // Build egg map
   var eggMap={};
   periods.forEach(function(p){
     if(p.status!=='done'&&p.status!=='loading')return;
@@ -237,9 +228,7 @@ function runGloWormMulti(days,periods,ha,sp){
       }
     });
   });
-  var rainHistory=[],petHistory=[];
-  var E=0,L=0,L3f=0,L3p=0,out=[];
-
+  var rainHistory=[],petHistory=[],E=0,L=0,L3f=0,L3p=0,out=[];
   for(var i=0;i<days.length;i++){
     var d=days[i],dDate=d.date.slice(0,10);
     var T=d.temp!=null?d.temp:10,R=d.rain!=null?d.rain:0;
@@ -266,7 +255,9 @@ function runGloWormMulti(days,periods,ha,sp){
     L3f=Math.max(0,L3f+dL3f);
     L3p=Math.max(0,L3p+dL3p);
     var L3h=L3p*m2;
-    out.push({date:dDate,larval:L3p>0.01?L3p:0,larvalH:L3h>0.01?L3h:0});
+    var L3hKg=L3h/KG_DM_HA;
+    // Filter floating point noise — only record meaningful values
+    out.push({date:dDate,larval:L3p>0.01?L3p:0,larvalH:L3h>0.01?L3h:0,larvalHkg:L3hKg>L3H_MIN?L3hKg:0});
   }
   var peak=0;for(var i=0;i<out.length;i++)if(out[i].larval>peak)peak=out[i].larval;
   var current=out.length?out[out.length-1].larval:0;
@@ -380,9 +371,9 @@ document.getElementById('btnPeriodSave').addEventListener('click',async function
   var start=document.getElementById('pStart').value;
   var end=document.getElementById('pEnd').value;
   var errEl=document.getElementById('periodErr');
-  if(!mobId)   {errEl.innerHTML='<div class="err-box">Please select a mob.</div>';return;}
-  if(!start)   {errEl.innerHTML='<div class="err-box">Please set a grazing start date.</div>';return;}
-  if(!end)     {errEl.innerHTML='<div class="err-box">Please set a grazing end date.</div>';return;}
+  if(!mobId){errEl.innerHTML='<div class="err-box">Please select a mob.</div>';return;}
+  if(!start){errEl.innerHTML='<div class="err-box">Please set a grazing start date.</div>';return;}
+  if(!end){errEl.innerHTML='<div class="err-box">Please set a grazing end date.</div>';return;}
   if(start>=TODAY){errEl.innerHTML='<div class="err-box">Grazing start must be before today.</div>';return;}
   if(end<=start){errEl.innerHTML='<div class="err-box">Grazing end must be after start.</div>';return;}
   var field=fields.find(function(f){return f.id===editingPeriodFieldId;});
@@ -394,9 +385,8 @@ document.getElementById('btnPeriodSave').addEventListener('click',async function
   editingPeriodId=null;
   document.getElementById('periodOverlay').style.display='none';
   persist();renderMain();
-  // Run analysis
-  // Find earliest start date across all periods
-  var earliestStart=period.start;
+  // Find earliest start across all periods
+  var earliestStart=start;
   field.periods.forEach(function(p){if(p.start<earliestStart)earliestStart=p.start;});
   try{
     var weather=await getWeather(earliestStart);
@@ -404,27 +394,19 @@ document.getElementById('btnPeriodSave').addEventListener('click',async function
     if(weather.historical.length&&weather.forecast.length){
       var lastHistDate=weather.historical[weather.historical.length-1].date.slice(0,10);
       var firstFcastDate=weather.forecast[0].date.slice(0,10);
-      var gap=[];
-      var gd=new Date(lastHistDate);gd.setDate(gd.getDate()+1);
+      var gap=[],gd=new Date(lastHistDate);gd.setDate(gd.getDate()+1);
       while(gd.toISOString().slice(0,10)<firstFcastDate){
         gap.push({date:gd.toISOString().slice(0,10),temp:10,rain:0,solar:10,forecast:false});
         gd.setDate(gd.getDate()+1);
       }
-      allDays=weather.historical.concat(gap,weather.forecast);
+      // Deduplicate
+      var seen={};
+      allDays=weather.historical.concat(gap,weather.forecast).filter(function(d){
+        var k=d.date.slice(0,10);if(seen[k])return false;seen[k]=true;return true;
+      });
     }
-    // Deduplicate by date, keeping last occurrence
-    var seen={},dedupedDays=[];
-    allDays.forEach(function(d){seen[d.date.slice(0,10)]=d;});
-    // Rebuild in order
-    allDays.forEach(function(d){
-      var key=d.date.slice(0,10);
-      if(seen[key]===d)dedupedDays.push(d);
-    });
-    allDays=dedupedDays;
-    // Run model across ALL periods for this field
-    var updatedField=fields.find(function(f){return f.id===editingPeriodFieldId;});
+    var updatedField=fields.find(function(f){return f.id===field.id;});
     updatedField.periods=updatedField.periods.map(function(p){return p.id===pid?Object.assign({},p,{status:'done'}):p;});
-    // Run model across ALL periods using full weather range
     var spResults={};
     SPECIES.forEach(function(sp){spResults[sp.key]=runGloWormMulti(allDays,updatedField.periods,updatedField.ha,sp);});
     var h=weather.historical;
@@ -524,18 +506,18 @@ function drawParasiteOnCanvas(canvas,spResults,periods,forecastStart,W,H){
     ctx.fillRect(x1,pt,x2-x1,ch);
   });
 
-  // Axes
+  // Y axis
   ctx.save();ctx.font='10px system-ui';ctx.fillStyle='#999';ctx.textAlign='center';
   ctx.translate(11,pt+ch/2);ctx.rotate(-Math.PI/2);ctx.fillText('L3 / kg DM',0,0);ctx.restore();
   ctx.font='10px system-ui';ctx.textAlign='right';
   [0,0.25,0.5,0.75,1].forEach(function(frac){
     var gy=pt+ch-frac*ch;
-    ctx.fillStyle='#aaa';ctx.fillText(Math.round(frac*mx).toLocaleString(),pl-5,gy+3);
+    ctx.fillStyle='#aaa';ctx.fillText((frac*mx).toFixed(2),pl-5,gy+3);
     ctx.strokeStyle='#ececec';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(pl,gy);ctx.lineTo(pl+cw,gy);ctx.stroke();
   });
   ctx.strokeStyle='#ccc';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(pl,pt);ctx.lineTo(pl,pt+ch);ctx.lineTo(pl+cw,pt+ch);ctx.stroke();
 
-  // Period boundary markers
+  // Period markers
   periods.forEach(function(p){
     if(p.status!=='done')return;
     [p.start,p.end].forEach(function(ds){
@@ -560,25 +542,26 @@ function drawParasiteOnCanvas(canvas,spResults,periods,forecastStart,W,H){
     if(forecastStart){for(var i=0;i<spN;i++){if(spDays[i].date>=forecastStart){fIdx=i;break;}}}
     ctx.strokeStyle=sp.color;ctx.lineWidth=2;ctx.lineJoin='round';ctx.setLineDash([]);ctx.beginPath();
     for(var i=0;i<Math.min(fIdx+1,spN);i++){
-      var hkg=spDays[i].larvalHkg!=null?spDays[i].larvalHkg:spDays[i].larvalH/KG_DM_HA;
-      var px=iX(i),py=pt+ch-(hkg/mx)*ch;if(i===0)ctx.moveTo(px,py);else ctx.lineTo(px,py);}
+      var hkg=spDays[i].larvalHkg!=null?spDays[i].larvalHkg:(spDays[i].larvalH/KG_DM_HA);
+      var px=iX(i),py=pt+ch-(hkg/mx)*ch;if(i===0)ctx.moveTo(px,py);else ctx.lineTo(px,py);
+    }
     ctx.stroke();
     if(fIdx<spN){
       ctx.setLineDash([6,4]);ctx.beginPath();
       for(var i=Math.max(0,fIdx-1);i<spN;i++){
-        var hkg=spDays[i].larvalHkg!=null?spDays[i].larvalHkg:spDays[i].larvalH/KG_DM_HA;
-        var px=iX(i),py=pt+ch-(hkg/mx)*ch;if(i===Math.max(0,fIdx-1))ctx.moveTo(px,py);else ctx.lineTo(px,py);}
+        var hkg=spDays[i].larvalHkg!=null?spDays[i].larvalHkg:(spDays[i].larvalH/KG_DM_HA);
+        var px=iX(i),py=pt+ch-(hkg/mx)*ch;if(i===Math.max(0,fIdx-1))ctx.moveTo(px,py);else ctx.lineTo(px,py);
+      }
       ctx.stroke();ctx.setLineDash([]);
     }
     for(var i=0;i<spN;i++){
-      var hkg=spDays[i].larvalHkg!=null?spDays[i].larvalHkg:spDays[i].larvalH/KG_DM_HA;
+      var hkg=spDays[i].larvalHkg!=null?spDays[i].larvalHkg:(spDays[i].larvalH/KG_DM_HA);
       var px=iX(i),py=pt+ch-(hkg/mx)*ch;
       ctx.beginPath();ctx.arc(px,py,3,0,Math.PI*2);ctx.fillStyle='#fff';ctx.fill();
       ctx.strokeStyle=sp.color;ctx.lineWidth=1.5;ctx.stroke();
     }
   });
 
-  // X labels
   ctx.fillStyle='#aaa';ctx.textAlign='center';ctx.font='10px system-ui';ctx.setLineDash([]);
   var skip=Math.max(1,Math.floor(n/8));
   for(var i=0;i<n;i++)if(i%skip===0||i===n-1)ctx.fillText(days0[i].date.slice(5),iX(i),H-8);
@@ -639,7 +622,6 @@ function attachHover(canvasId,spResults){
   var days0=getDays0(spResults),n=days0.length;if(!n)return;
   var tip=document.getElementById('chartTip');
   var pl=72,pr=16,pt=18,pb=34;
-
   c.addEventListener('mousemove',function(e){
     var rect=c.getBoundingClientRect();
     var cw=rect.width-pl-pr,ch=rect.height-pt-pb;
@@ -661,11 +643,10 @@ function attachHover(canvasId,spResults){
     var hkg=sd.larvalHkg!=null?sd.larvalHkg:(sd.larvalH!=null?sd.larvalH/KG_DM_HA:0);
     tip.innerHTML='<strong>'+days0[idx].date+'</strong>'
       +'<br><span style="color:'+closestSp.color+'">●</span> '+closestSp.name
-      +'<br>&nbsp;&nbsp;L3h: <strong>'+hkg.toFixed(2)+'</strong> /kg DM';
+      +'<br>&nbsp;&nbsp;L3h: <strong>'+hkg.toFixed(3)+'</strong> /kg DM';
     var tx=e.clientX+16,ty=e.clientY-10;
     if(tx+200>window.innerWidth)tx=e.clientX-210;
-    tip.style.left=tx+'px';tip.style.top=ty+'px';
-    tip.style.display='block';
+    tip.style.left=tx+'px';tip.style.top=ty+'px';tip.style.display='block';
   });
   c.addEventListener('mouseleave',function(){tip.style.display='none';});
 }
@@ -700,12 +681,59 @@ function renderFields(el){
     return;
   }
 
+  // All computed up front
   var donePeriods=f.periods.filter(function(p){return p.status==='done';});
-  var hasResults=f.spResults&&donePeriods.length>0;
+  var hasResults=!!(f.spResults&&donePeriods.length>0);
   var loadingPeriods=f.periods.filter(function(p){return p.status==='loading';});
   var todayDays=f.weather?f.weather.filter(function(d){return d.date.slice(0,10)>=TODAY;}):[];
+  var latestPeriod=donePeriods.slice(-1)[0];
+  var latestMob=latestPeriod?mobs.find(function(m){return m.id===latestPeriod.mobId;}):null;
 
-  // Period list HTML
+  // ── Challenge panel ──
+  var challengeHtml='';
+  if(todayDays.length&&latestMob){
+    var fec=getMobFec(latestMob,TODAY);
+    var fakePeriods=[{id:'forecast',mobId:latestMob.id,start:TODAY,end:todayDays[todayDays.length-1].date,status:'done'}];
+    var challengeCards=SPECIES.map(function(sp){
+      var res=runGloWormMulti(todayDays,fakePeriods,f.ha,sp);
+      var hitDay=null,hitDate=null;
+      for(var j=0;j<res.days.length;j++){
+        var hkg=res.days[j].larvalHkg!=null?res.days[j].larvalHkg:res.days[j].larvalH/KG_DM_HA;
+        if(hkg>L3H_MIN){hitDay=j;hitDate=res.days[j].date;break;}
+      }
+      return '<div style="text-align:center;padding:12px;border-radius:8px;background:#f8f9fa;border:1px solid #dee2e6">'
+        +'<div style="font-size:11px;font-weight:600;color:#6c757d;margin-bottom:6px">'
+        +'<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+sp.color+';margin-right:4px;vertical-align:middle"></span>'+sp.name+'</div>'
+        +(hitDay===null
+          ?'<div style="font-size:26px;font-weight:700;color:#27ae60">&gt;14</div><div style="font-size:11px;color:#6c757d">days (beyond forecast window)</div>'
+          :'<div style="font-size:32px;font-weight:700;color:#333">'+hitDay+'<span style="font-size:13px;font-weight:400;color:#6c757d"> days</span></div>'
+          +'<div style="font-size:12px;color:#6c757d;margin-top:2px">'+hitDate+'</div>'
+          +'<div style="font-size:11px;color:#e67e22;margin-top:4px">L3h first appears on herbage</div>')
+        +'</div>';
+    }).join('');
+    challengeHtml='<div class="card" style="margin-bottom:14px">'
+      +'<h3>Days to First Larval Challenge if Turned Out Today</h3>'
+      +'<p style="font-size:11px;color:#6c757d;margin:4px 0 12px">Forecast from '+TODAY+' using '+latestMob.name+' (FEC '+fec+' epg). Days until L3h first appears on herbage.</p>'
+      +'<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:14px">'+challengeCards+'</div>'
+      +'</div>';
+  }
+
+  // ── Species cards ──
+  var cardsHtml='';
+  if(hasResults){
+    cardsHtml='<div class="cards2">'+SPECIES.map(function(s){
+      var sr=f.spResults[s.key];
+      var curHkg=sr.currentH/KG_DM_HA;
+      var peakHkg=sr.peak/KG_DM_HA;
+      return '<div class="rcard"><div class="spname"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+s.color+';margin-right:5px;vertical-align:middle"></span>'+s.name+'</div>'
+        +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'
+        +'<div><div style="font-size:10px;color:#6c757d">L3h today</div><div style="font-size:18px;font-weight:700">'+curHkg.toFixed(2)+'<span style="font-size:11px;font-weight:400;color:#6c757d"> /kg DM</span></div></div>'
+        +'<div><div style="font-size:10px;color:#6c757d">Peak L3h</div><div style="font-size:18px;font-weight:700">'+peakHkg.toFixed(2)+'<span style="font-size:11px;font-weight:400;color:#6c757d"> /kg DM</span></div></div>'
+        +'</div></div>';
+    }).join('')+'</div>';
+  }
+
+  // ── Period list ──
   var periodsHtml=f.periods.length?f.periods.map(function(p,pi){
     var mob=mobs.find(function(m){return m.id===p.mobId;})||{name:'Unknown'};
     var fec=mob.fecs&&mob.fecs.length?getMobFec(mob,p.start):'-';
@@ -714,64 +742,25 @@ function renderFields(el){
     else if(p.status==='error')statusBadge='<span style="font-size:11px;color:#721c24;background:#f8d7da;padding:2px 7px;border-radius:10px;margin-left:6px">Error</span>';
     else if(p.status==='done')statusBadge='<span style="font-size:11px;color:#155724;background:#d4edda;padding:2px 7px;border-radius:10px;margin-left:6px">Done</span>';
     return '<div class="row-item">'
-      +'<div>'
-      +'<h4><span class="period-band" style="background:'+PERIOD_COLORS[pi%PERIOD_COLORS.length].replace('0.18','0.6').replace('0.15','0.6').replace('0.12','0.6')+'"></span>'
+      +'<div><h4><span style="display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:middle;background:'+PERIOD_COLORS[pi%PERIOD_COLORS.length].replace(/[\d.]+\)$/,'0.6)')+'"></span>'
       +p.start+' → '+p.end+statusBadge+'</h4>'
-      +'<p>'+mob.name+' · FEC '+fec+' epg'+(p.status==='error'?' · '+p.error:'')+'</p>'
-      +'</div>'
+      +'<p>'+mob.name+' · FEC '+fec+' epg'+(p.status==='error'?' · '+p.error:'')+'</p></div>'
       +'<div style="display:flex;gap:6px">'
       +'<button class="btn-grey btn-sm btn-edit-period" data-pid="'+p.id+'">Edit</button>'
       +'<button class="btn-red btn-sm btn-del-period" data-pid="'+p.id+'">Delete</button>'
       +'</div></div>';
   }).join(''):'<p style="font-size:13px;color:#6c757d">No grazing periods yet.</p>';
 
-  // Species summary cards
-  var cardsHtml='';
-  if(hasResults){
-    cardsHtml='<div class="cards2">'+SPECIES.map(function(s){
-      var sr=f.spResults[s.key];
-      return '<div class="rcard"><div class="spname"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+s.color+';margin-right:5px;vertical-align:middle"></span>'+s.name+'</div>'
-        +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'
-        +'<div><div style="font-size:10px;color:#6c757d">L3h on herbage (today)</div><div style="font-size:18px;font-weight:700">'+Math.round(sr.currentH).toLocaleString()+'<span style="font-size:11px;font-weight:400;color:#6c757d"> /ha</span></div></div>'
-        +'<div><div style="font-size:10px;color:#6c757d">Total L3p on pasture</div><div style="font-size:18px;font-weight:700">'+Math.round(sr.current).toLocaleString()+'<span style="font-size:11px;font-weight:400;color:#6c757d"> /ha</span></div></div>'
-        +'<div><div style="font-size:10px;color:#6c757d">Peak L3p (season)</div><div style="font-size:18px;font-weight:700">'+Math.round(sr.peak).toLocaleString()+'<span style="font-size:11px;font-weight:400;color:#6c757d"> /ha</span></div></div>'
-        +'</div></div>';
-    }).join('')+'</div>';
-  }
-
-  // Days to significant challenge — first day L3p exceeds 1000/ha
-  var challengeHtml='';
-  if(hasResults){
-    var challengeCards=SPECIES.map(function(s){
-      var days=f.spResults[s.key].days;
-      var hitDay=null,hitDate=null;
-      for(var j=0;j<days.length;j++){
-        if(days[j].larvalHkg>0.5){hitDay=j;hitDate=days[j].date;break;}
-      }
-      return '<div style="text-align:center;padding:12px;border-radius:8px;background:#f8f9fa;border:1px solid #dee2e6">'
-        +'<div style="font-size:11px;font-weight:600;color:#6c757d;margin-bottom:6px">'
-        +'<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+s.color+';margin-right:4px;vertical-align:middle"></span>'+s.name+'</div>'
-        +(hitDay===null
-          ?'<div style="font-size:22px;font-weight:700;color:#27ae60">Never</div><div style="font-size:11px;color:#6c757d">L3p stays below 1,000 /ha</div>'
-          :'<div style="font-size:28px;font-weight:700;color:#333">Day '+hitDay+'</div>'
-          +'<div style="font-size:12px;color:#6c757d;margin-top:2px">'+hitDate+'</div>'
-          +'<div style="font-size:11px;color:#e67e22;margin-top:4px">L3h first detected on herbage</div>')
-        +'</div>';
-    }).join('');
-    challengeHtml='<div class="card" style="margin-bottom:14px">'
-      +'<h3>Significant Larval Challenge</h3>'
-      +'<p style="font-size:11px;color:#6c757d;margin:4px 0 12px">Day L3p first exceeds 1,000 /ha from grazing start.</p>'
-      +'<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:14px">'+challengeCards+'</div>'
-      +'</div>';
-  }
+  // ── Chart ──
   var chartHtml='';
   if(hasResults){
     var leg=SPECIES.map(function(s){return '<span style="display:inline-flex;align-items:center;gap:5px"><span style="display:inline-block;width:22px;height:3px;border-radius:2px;background:'+s.color+'"></span>'+s.name+' L3h/kg DM</span>';}).join('');
     var bandLeg=donePeriods.map(function(p,pi){
       var mob=mobs.find(function(m){return m.id===p.mobId;})||{name:'?'};
-      return '<span style="display:inline-flex;align-items:center;gap:5px"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:'+PERIOD_COLORS[pi%PERIOD_COLORS.length].replace('0.18','0.5').replace('0.15','0.5').replace('0.12','0.5')+'"></span>'+mob.name+' ('+p.start+' – '+p.end+')</span>';}).join('');
+      return '<span style="display:inline-flex;align-items:center;gap:5px"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:'+PERIOD_COLORS[pi%PERIOD_COLORS.length].replace(/[\d.]+\)$/,'0.5)')+'"></span>'+mob.name+' ('+p.start+' – '+p.end+')</span>';
+    }).join('');
     chartHtml='<div class="card">'
-      +'<h3>L3 on Herbage</h3>'
+      +'<h3>L3h on Herbage (L3/kg DM)</h3>'
       +'<div class="wleg">'+leg+'<span style="display:inline-flex;align-items:center;gap:5px"><span style="display:inline-block;width:22px;border-top:2px dashed #888"></span>forecast</span></div>'
       +'<div class="wleg" style="margin-bottom:10px">'+bandLeg+'</div>'
       +'<div class="chart-wrap" id="cParWrap"><canvas id="cMain"></canvas></div></div>'
@@ -800,7 +789,7 @@ function renderFields(el){
     +'</div></div>'
     +(loadingPeriods.length?'<div style="display:flex;align-items:center;gap:10px;padding:12px;background:#fff3cd;border-radius:8px;margin-bottom:14px;font-size:13px"><div class="spinner" style="width:20px;height:20px;margin:0"></div>Analysing '+loadingPeriods.length+' period(s)...</div>':'')
     +cardsHtml
-    +(todayDays.length?challengeHtml:'')
+    +challengeHtml
     +'<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><h3 style="margin:0">Grazing Periods</h3>'
     +'<button id="btnAddPeriod" class="btn-green btn-sm">+ Add Grazing Period</button></div>'
     +periodsHtml+'</div>'
@@ -835,7 +824,6 @@ function renderFields(el){
       var pid=this.dataset.pid;
       if(!confirm('Delete this grazing period?'))return;
       f.periods=f.periods.filter(function(p){return p.id!==pid;});
-      // re-run model without this period
       if(f.weather&&f.periods.filter(function(p){return p.status==='done';}).length){
         var spResults={};
         SPECIES.forEach(function(sp){spResults[sp.key]=runGloWormMulti(f.weather,f.periods,f.ha,sp);});
@@ -851,7 +839,7 @@ function renderFields(el){
       sizeCanvas('cWeather',function(c,W,H){drawWeatherOnCanvas(c,f.weather,f.forecastStart,W,H);},200);
       attachHover('cMain',f.spResults);
       document.getElementById('cParWrap').addEventListener('click',function(){
-        expandChart(function(c,W,H){drawParasiteOnCanvas(c,f.spResults,f.periods,f.forecastStart,W,H);},f.name+' — L3 Larval Density');
+        expandChart(function(c,W,H){drawParasiteOnCanvas(c,f.spResults,f.periods,f.forecastStart,W,H);},f.name+' — L3h/kg DM');
       });
       document.getElementById('cWxWrap').addEventListener('click',function(){
         expandChart(function(c,W,H){drawWeatherOnCanvas(c,f.weather,f.forecastStart,W,H);},f.name+' — Weather');

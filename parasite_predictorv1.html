@@ -713,7 +713,7 @@ function renderFields(el){
     }).join('');
     challengeHtml='<div class="card" style="margin-bottom:14px">'
       +'<h3>Days to First Larval Challenge if Turned Out Today</h3>'
-      +'<p style="font-size:11px;color:#6c757d;margin:4px 0 12px">Forecast from '+TODAY+' using '+latestMob.name+' (FEC '+fec+' epg). Days until L3h first appears on herbage.</p>'
+      +'<p style="font-size:11px;color:#6c757d;margin:4px 0 12px">Forecast from '+TODAY+' using '+latestMob.name+' (FEC '+fec+' epg). Development lag calculated from forecast temperatures using GloWorm delta accumulation.</p>'
       +'<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:14px">'+challengeCards+'</div>'
       +'</div>';
   }
